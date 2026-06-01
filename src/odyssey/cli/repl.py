@@ -1,4 +1,3 @@
-import asyncio
 import os
 import shlex
 from pathlib import Path
@@ -74,7 +73,7 @@ async def run_repl(cwd: str) -> None:
             cmd = text.strip()
 
             if cmd.startswith("/"):
-                result = _handle_slash(cmd, conv)
+                result = await _handle_slash(cmd, conv)
                 if result == "exit":
                     break
                 if result:
@@ -97,7 +96,7 @@ async def run_repl(cwd: str) -> None:
         console.print("\n[dim]Odyssey session ended.[/dim]")
 
 
-def _handle_slash(cmd: str, conv: Conversation) -> str | None:
+async def _handle_slash(cmd: str, conv: Conversation) -> str | None:
     parts = cmd.split(maxsplit=1)
     command = parts[0].lower()
     arg = parts[1] if len(parts) > 1 else ""
@@ -113,7 +112,7 @@ def _handle_slash(cmd: str, conv: Conversation) -> str | None:
         return f"[dim]Current model: {get_fast_model()}[/dim]"
     elif command == "/status":
         from odyssey.llm.client import check_connection
-        connected = asyncio.run(check_connection())
+        connected = await check_connection()
         status = "Connected" if connected else "Disconnected"
         return f"[dim]Ollama: {status} | Model: {get_fast_model()} | Messages: {len(conv.messages)}[/dim]"
     elif command == "/history":
@@ -127,7 +126,7 @@ def _handle_slash(cmd: str, conv: Conversation) -> str | None:
         return "\n".join(lines)
     elif command == "/save":
         data_dir = get_data_dir()
-        save_file = data_dir / f"session_{asyncio.run(_get_timestamp())}.jsonl"
+        save_file = data_dir / f"session_{_get_timestamp()}.jsonl"
         import json
         with open(save_file, "w") as f:
             for msg in conv.messages:
@@ -136,7 +135,7 @@ def _handle_slash(cmd: str, conv: Conversation) -> str | None:
     return f"[dim]Unknown command: {command}. Type /help for available commands.[/dim]"
 
 
-async def _get_timestamp() -> str:
+def _get_timestamp() -> str:
     from datetime import datetime
     return datetime.now().strftime("%Y%m%d_%H%M%S")
 
