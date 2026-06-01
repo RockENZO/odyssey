@@ -1,5 +1,4 @@
 from typing import Any
-import json
 
 from ollama import AsyncClient
 
@@ -37,81 +36,25 @@ def get_embedding_model() -> str:
     return _settings.embedding_model
 
 
-async def generate(
-    system: str,
-    prompt: str,
+async def chat_completion(
+    messages: list[dict[str, Any]],
     model: str | None = None,
     temperature: float = 0.7,
-    format: str | None = None,
-) -> str:
+    include_tools: bool = True,
+) -> dict[str, Any]:
     client = get_client()
     model = model or get_fast_model()
-    response = await client.chat(
-        model=model,
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": prompt},
-        ],
-        options={"temperature": temperature},
-        format=format,
-    )
-    return response["message"]["content"]
-
-
-async def generate_structured(
-    system: str,
-    prompt: str,
-    output_model: type[Any],
-    model: str | None = None,
-    temperature: float = 0.2,
-) -> Any:
-    client = get_client()
-    model = model or get_fast_model()
-    schema = _pydantic_to_json_schema(output_model)
-    response = await client.chat(
-        model=model,
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": prompt},
-        ],
-        options={"temperature": temperature},
-        format=schema,
-    )
-    raw = response["message"]["content"]
-    return output_model.model_validate_json(raw)
-
-
-async def embed(text: str) -> list[float]:
-    client = get_client()
-    model = get_embedding_model()
-    response = await client.embed(model=model, input=text)
-    return response["embeddings"][0]
-
-
-def _pydantic_to_json_schema(model: type[Any]) -> dict[str, Any]:
-    schema = model.model_json_schema()
-    definitions = schema.pop("$defs", {})
-    schema.pop("title", None)
-    if definitions:
-        _resolve_refs(schema, definitions)
-    return {"type": "object", "properties": schema.get("properties", {})}
-
-
-def _resolve_refs(schema: dict, definitions: dict) -> None:
-    if not isinstance(schema, dict):
-        return
-    ref = schema.pop("$ref", None)
-    if ref:
-        key = ref.split("/")[-1]
-        resolved = definitions.get(key, {})
-        schema.update(resolved)
-    for v in schema.values():
-        if isinstance(v, dict):
-            _resolve_refs(v, definitions)
-        elif isinstance(v, list):
-            for item in v:
-                if isinstance(item, dict):
-                    _resolve_refs(item, definitions)
+    kwargs: dict[str, Any] = {
+        "model": model,
+        "messages": messages,
+        "options": {"temperature": temperature},
+    }
+    if include_tools:
+        from odyssey.tools.registry import get_tool_schemas
+        schemas = get_tool_schemas()
+        if schemas:
+            kwargs["tools"] = schemas
+    return await client.chat(**kwargs)
 
 
 async def check_connection() -> bool:
@@ -121,3 +64,10 @@ async def check_connection() -> bool:
         return True
     except Exception:
         return False
+
+
+async def embed(text: str) -> list[float]:
+    client = get_client()
+    model = get_embedding_model()
+    response = await client.embed(model=model, input=text)
+    return response["embeddings"][0]

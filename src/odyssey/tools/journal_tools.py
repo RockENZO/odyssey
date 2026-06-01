@@ -1,20 +1,29 @@
 from odyssey.storage.db import add_journal_entry, get_journal_entries
-from odyssey.llm.client import generate
+
+
+async def _llm_chat(system: str, prompt: str, temperature: float = 0.3) -> str:
+    from odyssey.llm.client import chat_completion
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": prompt},
+    ]
+    resp = await chat_completion(messages, include_tools=False, temperature=temperature)
+    return resp["message"]["content"]
 
 
 async def save_journal_tool(content: str) -> str:
     try:
-        summary = await generate(
-            system="You are a thoughtful journal assistant. Summarize the following journal entry in 1-2 sentences.",
-            prompt=content,
+        summary = await _llm_chat(
+            "You are a thoughtful journal assistant. Summarize the following journal entry in 1-2 sentences.",
+            content,
             temperature=0.3,
         )
-        sentiment = await generate(
-            system="Analyze the sentiment of this journal entry. Respond with one word only: positive, negative, or neutral.",
-            prompt=content,
+        sentiment_raw = await _llm_chat(
+            "Analyze the sentiment of this journal entry. Respond with one word only: positive, negative, or neutral.",
+            content,
             temperature=0.1,
         )
-        sentiment = sentiment.strip().lower()
+        sentiment = sentiment_raw.strip().lower()
         if sentiment not in ("positive", "negative", "neutral"):
             sentiment = "neutral"
         entry_id = add_journal_entry(content, sentiment=sentiment, summary=summary)
