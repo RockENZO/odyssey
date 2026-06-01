@@ -62,8 +62,13 @@ $ uv run odyssey
 ### Install & Run
 
 ```bash
+# Run directly (no install needed)
 uv sync
 uv run odyssey
+
+# Or install globally so you can run `odyssey` from anywhere
+uv tool install --force .
+odyssey
 ```
 
 This drops you into the REPL. Try:
