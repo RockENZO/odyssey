@@ -1,0 +1,29 @@
+[project]
+name = "odyssey"
+version = "0.1.0"
+description = "Personal AI command center — research, journal, tasks, memory, and daily briefings, all in your terminal."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "typer>=0.15.0",
+    "rich>=13.0.0",
+    "httpx>=0.28.0",
+    "pydantic>=2.0.0",
+    "platformdirs>=4.0.0",
+    "chromadb>=0.6.0",
+    "duckduckgo-search>=7.0.0",
+    "ollama>=0.4.0",
+    "langgraph>=0.4.0",
+]
+
+[project.scripts]
+odyssey = "odyssey.cli.app:app"
+
+[build-system]
+requires = ["uv_build>=0.11.3,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+]
