@@ -98,9 +98,9 @@ This drops you into the REPL. Try:
 
 ```toml
 ollama_host = "http://localhost:11434"
-fast_model = "qwen2.5:14b"       # default for most operations
-deep_model = "qwen3.6:35b-a3b-coding-nvfp4"  # for complex reasoning
-embedding_model = "qwen2.5:14b"
+fast_model = "qwen3.6:35b-a3b-coding-nvfp4"
+deep_model = "qwen3.6:35b-a3b-coding-nvfp4"
+embedding_model = "qwen3.6:35b-a3b-coding-nvfp4"
 ```
 
 ## How It Works

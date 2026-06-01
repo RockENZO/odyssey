@@ -16,7 +16,6 @@ warnings.filterwarnings("ignore", message=".*duckduckgo_search.*")
 app = typer.Typer(
     name="odyssey",
     help="Your versatile AI agent — coding, research, journaling, tasks, and more.",
-    no_args_is_help=True,
 )
 console = Console()
 

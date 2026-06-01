@@ -11,9 +11,9 @@ APP_NAME = "odyssey"
 
 class Settings(BaseModel):
     ollama_host: str = "http://localhost:11434"
-    fast_model: str = "qwen2.5:14b"
+    fast_model: str = "qwen3.6:35b-a3b-coding-nvfp4"
     deep_model: str = "qwen3.6:35b-a3b-coding-nvfp4"
-    embedding_model: str = "qwen2.5:14b"
+    embedding_model: str = "qwen3.6:35b-a3b-coding-nvfp4"
     data_dir: str = ""
     config_dir: str = ""
 
