@@ -1,12 +1,12 @@
 # Odyssey — Versatile AI Agent for Your Terminal
 
-A local-first AI agent that runs in your terminal. Powered by local LLMs via Ollama with zero cloud dependencies. Think Claude Code but self-hosted and extensible.
+A local-first AI agent that runs in your terminal. Uses a configurable Ollama endpoint for model inference, with local SQLite and ChromaDB persistence and tools for coding, web research, tasks and memory.
 
 ## Features
 
 - **Interactive REPL** — `uv run odyssey` drops you into a continuous `> ` prompt. Chat back and forth, the AI uses tools autonomously.
 - **17 tools** — File operations, bash, search, web research, memory, task management, journaling, sub-agents.
-- **Fully local** — Runs on your machine via Ollama. No data leaves your computer.
+- **Local model inference by default** — The default Ollama endpoint is localhost. Web search and URL-reading tools send requests to external sites; a remote Ollama endpoint also sends prompts to that endpoint. This is not an offline or no-egress guarantee.
 - **Autonomous tool loop** — The LLM decides which tools to call and in what order to fulfill your request.
 - **Coding + Daily life** — Read/edit files, run commands, grep/glob codebases, search the web, save memories, manage tasks, journal.
 
@@ -29,7 +29,7 @@ $ uv run odyssey
   └────────┴────────┴────────┴────────┴────────┴────────┘
   │
   ▼  Ollama (local LLM)
-     qwen2.5:14b (fast) / qwen3.6:35b (deep)
+     fast_model / deep_model from the loaded configuration
 ```
 
 ## Tools
@@ -57,12 +57,14 @@ $ uv run odyssey
 
 - Python 3.13+
 - [Ollama](https://ollama.ai) running locally
-- A model pulled: `ollama pull qwen2.5:14b`
+- Installed chat models supporting tool calls, selected explicitly in the configuration. Memory tools also require an embedding model compatible with Ollama’s embed API. The code currently defaults all three model fields to `qwen3.6:35b-a3b-coding-nvfp4`; availability and embedding support must be checked on your installation.
 
 ### Install & Run
 
 ```bash
-# Run directly (no install needed)
+git clone https://github.com/RockENZO/odyssey.git
+cd odyssey
+# Sync the project environment:
 uv sync
 uv run odyssey
 
@@ -94,7 +96,13 @@ This drops you into the REPL. Try:
 
 ### Configuration
 
-`~/.config/odyssey/config.toml`:
+The default configuration directory comes from `platformdirs` and differs by operating system; it is not universally `~/.config/odyssey`. Print it with:
+
+```bash
+uv run python -c "from odyssey.config import get_config_dir; print(get_config_dir())"
+```
+
+Create `config.toml` in that directory. Alternatively, set `ODYSSEY_CONFIG_DIR` to a chosen directory before launching. `ODYSSEY_DATA_DIR` overrides local persistence. Use the exact installed model names; the following shows the checked-in defaults, not validated recommendations:
 
 ```toml
 ollama_host = "http://localhost:11434"
@@ -110,7 +118,7 @@ Odyssey is an **interactive CLI tool, not a background daemon**. Each `uv run od
 1. Starts the REPL and waits for your input
 2. For each message, runs the **tool-calling loop**: the LLM receives your request + tool schemas, decides which tool to call, executes it, gets the result, and repeats until it can answer
 3. Returns to the `> ` prompt for your next message
-4. When you `/exit`, the process ends — zero resource usage
+4. When you `/exit`, the CLI process ends; persisted files remain and Ollama may continue running
 
 The only persistent background process is **Ollama** itself (`ollama serve`), which keeps the LLM model loaded in memory.
 
@@ -140,9 +148,10 @@ src/odyssey/
 | Component | Choice |
 |---|---|
 | Agent architecture | Tool-calling loop (LLM chooses tools) |
-| Local LLM | Ollama + Qwen 2.5 14B / Qwen 3.6 35B |
+| Model inference | Configurable Ollama chat and embedding model names |
 | Vector store | ChromaDB |
 | Structured storage | SQLite |
 | REPL UI | prompt_toolkit |
 | CLI rendering | Rich |
 | Web search | DuckDuckGo |
+
