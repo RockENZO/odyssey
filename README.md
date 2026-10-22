@@ -6,7 +6,7 @@ A local-first AI agent that runs in your terminal. Uses a configurable Ollama en
 
 - **Interactive REPL** — `uv run odyssey` drops you into a continuous `> ` prompt. Chat back and forth, the AI uses tools autonomously.
 - **17 tools** — File operations, bash, search, web research, memory, task management, journaling, sub-agents.
-- **Local model inference by default** — The default Ollama endpoint is localhost. Web search and URL-reading tools send requests to external sites; a remote Ollama endpoint also sends prompts to that endpoint. This is not an offline or no-egress guarantee.
+- **Local model inference by default** — The default Ollama endpoint is localhost. Web search and URL-reading tools send requests to external sites; a remote Ollama endpoint receives the conversation (including tool results such as file contents, shell output, fetched pages and retrieved memories) and memory text or queries sent for embedding. This is not an offline or no-egress guarantee.
 - **Autonomous tool loop** — The LLM decides which tools to call and in what order to fulfill your request.
 - **Coding + Daily life** — Read/edit files, run commands, grep/glob codebases, search the web, save memories, manage tasks, journal.
 
@@ -99,10 +99,13 @@ This drops you into the REPL. Try:
 The default configuration directory comes from `platformdirs` and differs by operating system; it is not universally `~/.config/odyssey`. Print it with:
 
 ```bash
-uv run python -c "from odyssey.config import get_config_dir; print(get_config_dir())"
+# From the checkout:
+uv run odyssey config-path
+# After global installation, from any directory:
+odyssey config-path
 ```
 
-Create `config.toml` in that directory. Alternatively, set `ODYSSEY_CONFIG_DIR` to a chosen directory before launching. `ODYSSEY_DATA_DIR` overrides local persistence. Use the exact installed model names; the following shows the checked-in defaults, not validated recommendations:
+Create `config.toml` in that directory. Alternatively, set `ODYSSEY_CONFIG_DIR` to a chosen directory before launching. `ODYSSEY_DATA_DIR` overrides local persistence. Both overrides expand `~` and create missing parent directories automatically; an existing file or inaccessible directory raises an error without overwriting it. The `config-path` command creates the configuration directory but does not start the agent or contact Ollama. Use the exact installed model names; the following shows the checked-in defaults, not validated recommendations:
 
 ```toml
 ollama_host = "http://localhost:11434"
@@ -155,3 +158,13 @@ src/odyssey/
 | CLI rendering | Rich |
 | Web search | DuckDuckGo |
 
+
+## Startup and persistence regression tests
+
+These isolated tests exercise real SQLite persistence, first-run directories and the
+installed CLI without downloading a model or contacting Ollama:
+
+```bash
+uv sync --group dev
+uv run pytest -q
+```
