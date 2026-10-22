@@ -18,17 +18,21 @@ class Settings(BaseModel):
     config_dir: str = ""
 
 
+def _ensure_directory(value: str) -> Path:
+    path = Path(value).expanduser()
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
 def get_data_dir() -> Path:
-    return Path(
-        os.environ.get("ODYSSEY_DATA_DIR")
-        or user_data_dir(APP_NAME, ensure_exists=True)
+    return _ensure_directory(
+        os.environ.get("ODYSSEY_DATA_DIR") or user_data_dir(APP_NAME)
     )
 
 
 def get_config_dir() -> Path:
-    return Path(
-        os.environ.get("ODYSSEY_CONFIG_DIR")
-        or user_config_dir(APP_NAME, ensure_exists=True)
+    return _ensure_directory(
+        os.environ.get("ODYSSEY_CONFIG_DIR") or user_config_dir(APP_NAME)
     )
 
 

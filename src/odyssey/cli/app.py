@@ -7,8 +7,6 @@ import typer
 from rich.console import Console
 
 from odyssey import __version__
-from odyssey.llm.client import check_connection, get_fast_model
-from odyssey.cli.repl import run_repl
 
 warnings.filterwarnings("ignore", category=ResourceWarning)
 warnings.filterwarnings("ignore", message=".*duckduckgo_search.*")
@@ -40,6 +38,7 @@ def repl():
 
 @app.command()
 def status():
+    from odyssey.llm.client import check_connection, get_fast_model
     connected = asyncio.run(check_connection())
     from rich.table import Table
     table = Table(title="Odyssey Status")
@@ -53,7 +52,15 @@ def status():
     console.print(table)
 
 
+@app.command("config-path")
+def config_path():
+    """Print the configuration directory without contacting Ollama."""
+    from odyssey.config import get_config_dir
+    typer.echo(str(get_config_dir()))
+
+
 def _launch_repl():
+    from odyssey.cli.repl import run_repl
     cwd = os.getcwd()
     asyncio.run(run_repl(cwd))
 
