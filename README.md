@@ -168,3 +168,14 @@ installed CLI without downloading a model or contacting Ollama:
 uv sync --group dev
 uv run pytest -q
 ```
+
+### Shell command lifecycle
+
+On macOS and Linux, each `bash` tool call runs in its own process session.
+Timeout or task cancellation kills that process group and waits for cleanup
+before releasing the command lock. Cancelling propagates to the caller rather
+than returning a success message. Normal output and exit-code reporting are
+unchanged. Processes that deliberately create another session can escape this
+group; this is lifecycle cleanup, not a security sandbox. On non-POSIX systems,
+cleanup can terminate only the direct process. Tools run with the current user's
+file and shell permissions; use a disposable environment for untrusted tasks.
