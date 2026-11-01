@@ -179,7 +179,18 @@ cannot interrupt cleanup. Process creation has no async cancellation gap. Cancel
 than returning a success message. Output uses the active locale encoding and retains normal exit-code reporting.
 Output is spooled to temporary files so inherited output handles in an escaped
 session cannot hold cleanup open; the 30,000-character display cap is not a disk
-usage quota. Processes that deliberately create another session can escape this
+usage quota. Only the first 120 KB of each captured stream (four bytes per
+character of the display cap) is read back and decoded, so a command that writes
+gigabytes of output is truncated without loading the whole file into memory; the
+temporary files can still consume disk until the command exits or times out.
+Processes that deliberately create another session can escape this
 group; this is lifecycle cleanup, not a security sandbox. On non-POSIX systems,
 cleanup can terminate only the direct process. Tools run with the current user's
 file and shell permissions; use a disposable environment for untrusted tasks.
+
+`web_search`'s HTML fallback and `read_url` stream remote bodies instead of
+reading them whole: at most 512 KB for the fallback and 2 MB for `read_url`
+before HTML cleaning and the 8,000-character visible-text cap. A larger response
+is closed early and reported as truncated. Neither tool validates the URL, so
+loopback, private-network and metadata-service URLs are reachable from a tool
+call; run untrusted content with that in mind.
