@@ -139,3 +139,25 @@ class BashLifecycleTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await bash('true'), '[command completed successfully with no output]')
         result = await bash(python_command('print("x"*31000)'))
         self.assertTrue(result.endswith('[output truncated at 30000 characters]'))
+
+    async def test_large_output_is_read_only_up_to_the_display_cap(self):
+        """The 30k character cap must not require loading all captured bytes."""
+        import tracemalloc
+        with tempfile.TemporaryFile() as captured:
+            captured.write(b'x' * 8_000_000)
+            captured.flush()
+            tracemalloc.start()
+            text, truncated = shell_module._read_captured_output(captured, 'utf-8')
+            _, peak = tracemalloc.get_traced_memory()
+            tracemalloc.stop()
+        self.assertTrue(truncated)
+        self.assertEqual(len(text), shell_module.MAX_OUTPUT_READ_BYTES)
+        self.assertLess(peak, 2_000_000, 'Reading captured output must stay bounded')
+
+    @unittest.skipUnless(os.name == 'posix', 'POSIX shell output capture')
+    async def test_huge_stdout_and_stderr_keep_the_display_cap(self):
+        huge = "import sys; sys.stdout.write('o'*5_000_000); sys.stderr.write('e'*5_000_000)"
+        result = await bash(python_command(huge), timeout=60)
+        self.assertEqual(len(result), 30000 + len("\n... [output truncated at 30000 characters]"))
+        self.assertTrue(result.startswith('o'))
+        self.assertTrue(result.endswith('[output truncated at 30000 characters]'))

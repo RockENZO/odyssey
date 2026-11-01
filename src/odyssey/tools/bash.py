@@ -10,6 +10,25 @@ import tempfile
 _working_dir: str = os.getcwd()
 _lock = asyncio.Lock()
 
+MAX_OUTPUT_CHARS = 30_000
+# Four bytes is the widest UTF-8 encoding of one character, so this many bytes
+# can always produce the visible cap without loading unbounded output at once.
+MAX_OUTPUT_READ_BYTES = MAX_OUTPUT_CHARS * 4
+
+
+def _read_captured_output(stream, encoding):
+    """Read at most enough captured bytes for the display cap.
+
+    Commands may write arbitrarily large output to the temporary files. Reading
+    the whole file would copy all of it into memory (and decode it) before the
+    display cap is applied, so bound the read and report whether more exists.
+    The temporary files can still consume disk while the command runs.
+    """
+    size = os.fstat(stream.fileno()).st_size
+    stream.seek(0)
+    data = stream.read(min(size, MAX_OUTPUT_READ_BYTES))
+    return data.decode(encoding, errors="replace"), size > MAX_OUTPUT_READ_BYTES
+
 
 async def _wait(process):
     # No asyncio subprocess transport: inherited pipes in a detached descendant
@@ -74,15 +93,17 @@ async def bash(command: str, timeout: int = 120) -> str:
                 stdout.seek(0)
                 stderr.seek(0)
                 encoding = locale.getpreferredencoding(False)
-                output = (stdout.read(os.fstat(stdout.fileno()).st_size).decode(encoding, errors="replace")
-                          + stderr.read(os.fstat(stderr.fileno()).st_size).decode(encoding, errors="replace"))
+                stdout_text, stdout_cut = _read_captured_output(stdout, encoding)
+                stderr_text, stderr_cut = _read_captured_output(stderr, encoding)
+                output = stdout_text + stderr_text
+                truncated = stdout_cut or stderr_cut
             output = output.replace("\r\n", "\n").replace("\r", "\n").strip()
             if not output:
                 if process.returncode == 0:
                     return "[command completed successfully with no output]"
                 return f"[exit code {process.returncode}]"
-            if len(output) > 30000:
-                output = output[:30000] + "\n... [output truncated at 30000 characters]"
+            if truncated or len(output) > MAX_OUTPUT_CHARS:
+                output = output[:MAX_OUTPUT_CHARS] + "\n... [output truncated at 30000 characters]"
             return output
         except asyncio.TimeoutError:
             return f"[command timed out after {timeout}s]"
