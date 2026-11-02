@@ -98,7 +98,7 @@ agent -> verify -> (agent | end)
 
 ## Evaluation (experimental)
 
-`odyssey.evals` is a frozen suite of ten small Python tasks (fix an off-by-one, implement a function from its docstring, rename across files, and so on) and a runner that measures the graph engine on it. Each task is a tiny project whose tests fail at the start. Install with `pip install 'odyssey[verify,eval]'`.
+`odyssey.evals` is a frozen suite of ten small Python tasks (fix an off-by-one, implement a function from its docstring, rename across files, and so on) and a runner that measures the graph engine on it. Each task is a tiny project whose tests fail at the start. Install with `pip install 'odyssey[verify,eval]'` (this includes pytest, which runs the checks).
 
 ```
 python -m odyssey.evals --out results/run-1                 # live model through Ollama (the configured fast model, or --model NAME)
@@ -107,7 +107,7 @@ python -m odyssey.evals --out results/lazy --lazy           # scripted do-nothin
 ```
 
 - **Tools.** An evaluated model runs unattended with approvals off, so it gets only `read`, `write`, `edit`, `glob`, `grep` and `todo_write`: no shell, no web, and none of the tools that write to your own memory, journal or task list. File tools stay inside the task directory. The gate runs the tests and gives failures back, so the model does not need a shell to iterate. `--allow-bash` adds the shell back; it is not sandboxed. The report lists the tools offered.
-- **How a task is judged.** The agent works in a fresh directory with no approval prompts. When it finishes, the runner runs the project's tests itself, with the test files pinned to their original text, so editing a test to make it pass fails. That independent check is the result. The gate's own verdict is recorded next to it; the two can differ, and the report counts the disagreements.
+- **How a task is judged.** The agent works in a fresh directory with no approval prompts. When it finishes, the runner runs the project's tests itself, with the test files pinned to their original text, so editing a test to make it pass fails. The check ignores anything the agent could plant in the directory (`conftest.py`, `pytest.ini`) and requires the exact number of test cases to run and pass, so skipping the tests does not count. That independent check is the result. The gate's own verdict is recorded next to it; the two can differ, and the report counts the disagreements.
 - **Frozen.** `suite_hash()` covers every prompt and file, and a test compares it with the recorded `SUITE_HASH`. Changing a task means bumping `SUITE_VERSION` and `SUITE_HASH` together and not comparing results across versions.
 - **What it writes.** `report.json`, `report.md` (device, model and digest when Ollama reports one, package versions, suite hash, one row per task), a cassette per task in `cassettes/`, and the ledger of every check in `ledger.sqlite`. Trajectory F1 against the reference solution is included as a diagnostic: a coding task has many valid trajectories.
 - **Checked without a model.** The reference solution passes all ten tasks and a do-nothing model fails all ten (tests in `tests/test_evals.py`), so each task is solvable and each check is real. Those two runs are labelled "not a model result" in their reports.

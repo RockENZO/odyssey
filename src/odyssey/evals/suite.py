@@ -19,10 +19,18 @@ import sys
 from dataclasses import dataclass, field
 
 SUITE_VERSION = "1"
-SUITE_HASH = "a66147683e7f082aff8f293b3bd43c40b8622ae70de4114c6d6b90838861dbb8"
+SUITE_HASH = "2419f570a45ad49d2a12122a008a2cbf570d1bb1992d791f8ec38977b6c6b22c"
 
-# The command that decides whether a task is done. Run in the task's directory.
-CHECK = [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider"]
+
+
+def check_argv(empty_config: str) -> list[str]:
+    """The command that decides whether a task is done. Run in the task's directory.
+
+    The agent can write any file in that directory, so the command ignores what it could plant:
+    ``--noconftest`` ignores conftest.py, and ``-c`` points at an empty config file outside the
+    directory, so a pytest.ini, tox.ini or setup.cfg it adds is not read.
+    """
+    return [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "--noconftest", "-c", empty_config]
 
 
 @dataclass(frozen=True)
@@ -32,10 +40,17 @@ class Task:
     files: dict[str, str]                 # starting files, including the pinned tests
     tests: tuple[str, ...]                # which of ``files`` are tests (pinned)
     solution: dict[str, str] = field(default_factory=dict)   # files the reference solution writes
+    expected_tests: int = 1               # how many test cases must run and pass; a skipped test is not a pass
 
 
 def _task(id, prompt, files, tests, solution):
-    return Task(id, prompt, files, tuple(tests), solution)
+    return Task(id, prompt, files, tuple(tests), solution, EXPECTED_TESTS[id])
+
+
+EXPECTED_TESTS = {
+    "off_by_one": 1, "fizzbuzz": 1, "slugify": 1, "mutable_default": 2, "rename_function": 2,
+    "parse_kv": 2, "stack_max": 2, "csv_total": 2, "validate_person": 6, "top_scores": 1,
+}
 
 
 TASKS: tuple[Task, ...] = (
@@ -149,7 +164,7 @@ TASKS: tuple[Task, ...] = (
 def suite_hash() -> str:
     """A hash over every prompt, file and solution, so a silent change to a task is caught."""
     payload = [
-        {"id": t.id, "prompt": t.prompt, "files": t.files, "tests": list(t.tests), "solution": t.solution}
+        {"id": t.id, "prompt": t.prompt, "files": t.files, "tests": list(t.tests), "solution": t.solution, "expected_tests": t.expected_tests}
         for t in TASKS
     ]
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()

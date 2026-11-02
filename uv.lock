@@ -1163,6 +1163,7 @@ dependencies = [
 
 [package.optional-dependencies]
 eval = [
+    { name = "pytest" },
     { name = "trajectory-replay" },
 ]
 verify = [
@@ -1185,6 +1186,7 @@ requires-dist = [
     { name = "platformdirs", specifier = ">=4.0.0" },
     { name = "prompt-toolkit", specifier = ">=3.0.52" },
     { name = "pydantic", specifier = ">=2.0.0" },
+    { name = "pytest", marker = "extra == 'eval'", specifier = ">=8" },
     { name = "rich", specifier = ">=13.0.0" },
     { name = "trajectory-replay", marker = "extra == 'eval'", git = "https://github.com/RockENZO/trajectory-replay?rev=00d6c1e" },
     { name = "transactional-agent-ledger", marker = "extra == 'verify'", git = "https://github.com/RockENZO/transactional-agent-ledger?rev=bf89fab" },

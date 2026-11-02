@@ -34,7 +34,7 @@ from typing import Any, Awaitable, Callable
 
 from langgraph.checkpoint.memory import MemorySaver
 
-from odyssey.evals.suite import CHECK, SUITE_HASH, SUITE_VERSION, Task, get_tasks, suite_hash
+from odyssey.evals.suite import SUITE_HASH, SUITE_VERSION, Task, check_argv, get_tasks, suite_hash
 
 ChatFn = Callable[[list[dict[str, Any]]], Awaitable[dict[str, Any]]]
 
@@ -96,12 +96,40 @@ def lazy_chat(task: Task) -> ChatFn:
     return chat
 
 
-def _independent_check(task: Task, workdir: Path) -> tuple[bool, str]:
+def _independent_check(task: Task, workdir: Path, out_dir: Path) -> tuple[bool, str]:
+    """The result: pinned tests, run with the agent's config and conftest ignored, and every expected test must pass.
+
+    Unchanged test text and a zero exit code are not enough: an agent could add a conftest.py that
+    skips the tests. So the run writes a JUnit report, and the report must show exactly the expected
+    number of test cases with no failure, error or skip.
+    """
+    import xml.etree.ElementTree as ET
+
     from agent_ledger import AllOf, CommandVerifier, ExpectedStateVerifier
 
+    junit = out_dir / "junit" / f"{task.id}.xml"
+    junit.parent.mkdir(parents=True, exist_ok=True)
+    junit.unlink(missing_ok=True)
     pins = ExpectedStateVerifier({p: task.files[p] for p in task.tests})
-    verdict = AllOf(pins, CommandVerifier(CHECK, timeout=120)).check(workdir, [])
-    return verdict.ok, verdict.reason
+    verdict = AllOf(pins, CommandVerifier(check_argv(_empty_config(out_dir)) + ["--junitxml", str(junit)], timeout=120)).check(workdir, [])
+    if not verdict.ok:
+        return False, verdict.reason
+    try:
+        suite = ET.parse(junit).getroot()
+        suite = suite if suite.tag == "testsuite" else suite.find("testsuite")
+        tests, bad = int(suite.get("tests", 0)), sum(int(suite.get(k, 0)) for k in ("failures", "errors", "skipped"))
+    except Exception as exc:
+        return False, f"could not read the test report: {exc}"
+    if tests != task.expected_tests or bad:
+        return False, f"expected {task.expected_tests} tests to run and pass, got {tests} run with {bad} failed, errored or skipped"
+    return True, f"{tests} tests passed"
+
+
+def _empty_config(out_dir: Path) -> str:
+    """An empty pytest config outside the task directory, so a pytest.ini the agent adds is never read."""
+    path = out_dir / "empty-pytest.ini"
+    path.write_text("", encoding="utf-8")
+    return str(path)
 
 
 async def run_task(
@@ -138,8 +166,9 @@ async def run_task(
     workspace.set_workspace_root(workdir)
     bash_tool._working_dir = str(workdir)
     policy = ApprovalPolicy(approve_all=True)
+    out_dir.mkdir(parents=True, exist_ok=True)
     gate = ledger_gate(
-        CHECK,
+        check_argv(_empty_config(out_dir)),
         ledger_path=out_dir / "ledger.sqlite",
         timeout=120,
         extra=ExpectedStateVerifier({p: task.files[p] for p in task.tests}),
@@ -160,7 +189,7 @@ async def run_task(
             error = f"{type(exc).__name__}: {exc}"
         seconds = time.monotonic() - started
         state = await session.state()
-        passed, detail = _independent_check(task, workdir)
+        passed, detail = _independent_check(task, workdir, out_dir)
         calls = calls_from_state(state)
     finally:
         workspace.set_workspace_root(None)
@@ -264,6 +293,10 @@ async def run_suite(
     with_gold: bool = True,
     tools: tuple[str, ...] = EVAL_TOOLS,
 ) -> dict[str, Any]:
+    import importlib.util
+
+    if importlib.util.find_spec("pytest") is None:
+        raise RuntimeError("the checks run pytest, which is not installed: pip install 'odyssey[verify,eval]'")
     out_dir.mkdir(parents=True, exist_ok=True)
     results: list[TaskResult] = []
     for task in tasks:

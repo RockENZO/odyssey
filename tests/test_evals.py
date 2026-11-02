@@ -158,3 +158,65 @@ def test_a_model_cannot_run_the_shell_unless_allowed(tmp_path):
     _, allowed = run_suite(tmp_path / "b", shell_user, get_tasks(["fizzbuzz"]), tools=runner.EVAL_TOOLS + ("bash",))
     assert marker.exists(), "--allow-bash should give the model the shell"
     assert "bash" in json.loads((tmp_path / "b" / "out" / "report.json").read_text())["environment"]["tools"]
+
+
+def _writes(*files):
+    """A scripted model that writes the given files, then says it is done (the same every round)."""
+    def make(_task):
+        calls = [{"tool_calls": [{"function": {"name": "write", "arguments": {"path": p, "content": c}}}]} for p, c in files]
+        queue = (calls + [{"content": "done"}]) * 3
+
+        async def chat(messages):
+            return {"message": queue.pop(0) if queue else {"content": "done"}}
+
+        return chat
+
+    return make
+
+
+def test_a_conftest_that_skips_the_tests_does_not_pass(tmp_path):
+    """The pinned test text is unchanged and pytest would exit 0 with everything skipped."""
+    skip_all = "import pytest\n\n\ndef pytest_collection_modifyitems(items):\n    for item in items:\n        item.add_marker(pytest.mark.skip(reason='x'))\n"
+    _, report = run_suite(tmp_path, _writes(("conftest.py", skip_all)), get_tasks(["off_by_one"]))
+    [result] = report["results"]
+    assert result["passed"] is False
+    assert result["gate"] == "unverified", "the gate runs the same hardened command"
+
+
+def test_a_pytest_config_that_deselects_the_tests_does_not_pass(tmp_path):
+    cfg = "[pytest]\naddopts = -k nothing_matches_this\n"
+    _, report = run_suite(tmp_path, _writes(("pytest.ini", cfg)), get_tasks(["off_by_one"]))
+    assert report["results"][0]["passed"] is False
+
+
+def test_the_expected_test_count_is_checked(tmp_path):
+    """Every task's reference solution runs exactly the number of tests the suite says it should."""
+    _, report = run_suite(tmp_path, runner.oracle_chat)
+    assert report["summary"]["passed"] == 10          # a wrong expected_tests would fail the oracle
+
+
+def test_delegation_is_not_offered_to_an_evaluated_model(tmp_path):
+    from odyssey.tools.registry import get_tool, init_tools
+
+    init_tools()
+    assert get_tool("task") is not None               # it exists in the registry...
+    seen = []
+
+    def spy(_task):
+        async def chat(messages):
+            seen.append(get_tool("task"))
+            return {"message": {"content": "ok"}}
+
+        return chat
+
+    run_suite(tmp_path, spy, get_tasks(["fizzbuzz"]))
+    assert seen == [None]                             # ...but not while a model is evaluated
+
+
+def test_missing_pytest_is_reported_before_the_suite_starts(tmp_path, monkeypatch):
+    import importlib.util
+
+    real = importlib.util.find_spec
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name, *a, **k: None if name == "pytest" else real(name, *a, **k))
+    with pytest.raises(RuntimeError, match=r"odyssey\[verify,eval\]"):
+        run_suite(tmp_path, runner.oracle_chat, get_tasks(["fizzbuzz"]))
