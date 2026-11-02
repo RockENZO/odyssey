@@ -52,11 +52,13 @@ class AgentState(TypedDict, total=False):
     status: str  # running | done | verified | unverified | budget_exhausted
     final: str
     verification: dict[str, Any]
+    workspace: str  # project root the thread was started in; resume refuses a different one
 
 
-def new_turn(user_input: str, *, max_model_calls: int = 25, max_tool_calls: int = 40, max_repairs: int = 2) -> dict[str, Any]:
+def new_turn(user_input: str, *, max_model_calls: int = 25, max_tool_calls: int = 40, max_repairs: int = 2, workspace: str = "") -> dict[str, Any]:
     """The state update that starts a new user turn on an existing or new thread."""
     return {
+        "workspace": workspace,
         "messages": [{"role": "user", "content": user_input}],
         "pending": [],
         "model_calls": 0,
@@ -137,6 +139,19 @@ def build_graph(
         return "tools" if state.get("pending") else "agent"
 
     async def tools(state: AgentState) -> dict[str, Any]:
+        if state.get("tool_calls_made", 0) >= state.get("max_tool_calls", 40):
+            # A batch can be longer than the budget that is left: stop before running any more.
+            text = "Stopped: the tool-call budget for this turn was used up. Break the request into smaller steps."
+            skipped = [
+                {"role": "tool", "content": "Not run: the tool-call budget for this turn was used up.", "tool_name": c["name"], "tool_call_id": c["id"]}
+                for c in state["pending"]
+            ]
+            return {
+                "messages": skipped + [{"role": "assistant", "content": text}],
+                "pending": [],
+                "status": "budget_exhausted",
+                "final": text,
+            }
         call, rest = state["pending"][0], state["pending"][1:]
         update: dict[str, Any] = {}
         started = time.monotonic()

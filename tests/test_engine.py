@@ -314,3 +314,40 @@ def test_threads_are_independent():
         return (await a.state())["final"], (await b.state())["final"]
 
     assert run(go()) == ("A", "B")
+
+
+def test_a_batch_longer_than_the_remaining_budget_is_cut_off(tmp_path):
+    (tmp_path / "r.txt").write_text("x")
+    batch = [call("read", path="r.txt")] * 4
+    chat = scripted({"tool_calls": batch})
+
+    async def go():
+        s = make(chat, max_tool_calls=2)
+        result = await s.submit("many")
+        return result, await s.state()
+
+    result, state = run(go())
+    assert result.status == "budget_exhausted"
+    assert len(state["tool_log"]) == 2, "calls beyond the budget were run"
+    tool_msgs = [m for m in state["messages"] if m["role"] == "tool"]
+    assert len(tool_msgs) == 4 and sum("Not run" in m["content"] for m in tool_msgs) == 2
+    assert state["pending"] == []
+
+
+def test_a_thread_is_bound_to_the_workspace_it_started_in(tmp_path):
+    saver = MemorySaver()
+    chat = scripted({"tool_calls": [call("write", path="a.txt", content="1")]}, {"content": "ok"})
+    policy = ApprovalPolicy()
+    graph = build_graph(chat, checkpointer=saver, policy=policy)
+    in_a = GraphSession(graph, "t", policy, workspace="/project/a")
+    in_b = GraphSession(graph, "t", policy, workspace="/project/b")
+
+    async def go():
+        await in_a.submit("write")
+        for attempt in (in_b.decide(True), in_b.resume(), in_b.submit("hi")):
+            with pytest.raises(RuntimeError, match="started in /project/a"):
+                await attempt
+        assert not (tmp_path / "a.txt").exists(), "the pending write ran in the wrong workspace"
+        return await in_a.decide(True)
+
+    assert run(go()).status == "done"

@@ -34,12 +34,28 @@ def new_thread_id() -> str:
 
 
 class GraphSession:
-    def __init__(self, graph: Any, thread_id: str, policy: ApprovalPolicy, **limits: int) -> None:
+    def __init__(self, graph: Any, thread_id: str, policy: ApprovalPolicy, workspace: str = "", **limits: int) -> None:
         self.graph = graph
         self.thread_id = thread_id
         self.policy = policy
+        self.workspace = workspace
         self.limits = limits
         self._config = {"configurable": {"thread_id": thread_id}}
+
+    def new_thread(self) -> str:
+        """Start a fresh conversation; the old thread stays in the checkpoint file."""
+        self.thread_id = new_thread_id()
+        self._config = {"configurable": {"thread_id": self.thread_id}}
+        return self.thread_id
+
+    def _check_workspace(self, snapshot) -> None:
+        """Unfinished work belongs to the workspace it was started in; do not run it in another."""
+        recorded = snapshot.values.get("workspace", "")
+        if self.workspace and recorded and recorded != self.workspace:
+            raise RuntimeError(
+                f"this thread was started in {recorded}, but Odyssey is running in {self.workspace}; "
+                "start Odyssey from the original directory or begin a new thread with /clear"
+            )
 
     async def _snapshot(self):
         return await self.graph.aget_state(self._config)
@@ -66,18 +82,20 @@ class GraphSession:
         return TurnResult(values.get("status", "idle"), text=values.get("final", ""))
 
     async def submit(self, text: str) -> TurnResult:
-        if await self.pending_approval():
-            raise RuntimeError("a tool call is waiting for approval: approve or reject it first")
         snapshot = await self._snapshot()
+        self._check_workspace(snapshot)
+        if self._interrupts(snapshot):
+            raise RuntimeError("a tool call is waiting for approval: approve or reject it first")
         if snapshot.next:
             raise RuntimeError("the previous turn did not finish: resume it first")
-        await self.graph.ainvoke(new_turn(text, **self.limits), self._config, durability="sync")
+        await self.graph.ainvoke(new_turn(text, workspace=self.workspace, **self.limits), self._config, durability="sync")
         return self._result(await self._snapshot())
 
     async def decide(self, approve: bool, reason: str = "", always: bool = False) -> TurnResult:
         waiting = await self.pending_approval()
         if not waiting:
             raise RuntimeError("nothing is waiting for approval")
+        self._check_workspace(await self._snapshot())
         if approve and always:
             for call in waiting:
                 self.policy.allow(call["name"])
@@ -89,6 +107,7 @@ class GraphSession:
         snapshot = await self._snapshot()
         if not snapshot.next:
             return TurnResult("idle", text=snapshot.values.get("final", ""))
+        self._check_workspace(snapshot)
         if self._interrupts(snapshot):
             return self._result(snapshot)
         in_flight = list(snapshot.values.get("pending", [])) if "tools" in snapshot.next else []

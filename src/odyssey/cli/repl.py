@@ -71,24 +71,32 @@ async def run_repl(cwd: str, engine: str = "loop", resume: bool = False, approve
     if engine == "graph":
         from odyssey.engine.session import default_db_path, open_checkpointer
         async with open_checkpointer(default_db_path()) as saver:
-            gs = await _start_graph_session(saver, resume, approve_all)
+            gs = await _start_graph_session(saver, resume, approve_all, project_root)
+            await _sync_conv(conv, gs)
             await _repl_loop(conv, gs)
     else:
         await _repl_loop(conv, None)
 
 
-async def _start_graph_session(saver, resume: bool, approve_all: bool):
+async def _start_graph_session(saver, resume: bool, approve_all: bool, workspace: str = ""):
     from odyssey.engine.graph import build_graph
     from odyssey.engine.policy import ApprovalPolicy
     from odyssey.engine.session import GraphSession, last_thread_file, new_thread_id
     from odyssey.llm.client import chat_completion
 
     thread_id = new_thread_id()
-    if resume and last_thread_file().exists():
-        thread_id = last_thread_file().read_text().strip() or thread_id
-    last_thread_file().write_text(thread_id)
     policy = ApprovalPolicy(approve_all=approve_all)
-    gs = GraphSession(build_graph(chat_completion, checkpointer=saver, policy=policy), thread_id, policy)
+    graph = build_graph(chat_completion, checkpointer=saver, policy=policy)
+    if resume and last_thread_file().exists():
+        previous = last_thread_file().read_text().strip()
+        recorded = (await graph.aget_state({"configurable": {"thread_id": previous}})).values.get("workspace", "") if previous else ""
+        if previous and recorded and recorded != workspace:
+            console.print(f"[yellow]The last thread was started in {recorded}, not here. Starting a new thread; "
+                          "run Odyssey from that directory to continue the old one.[/yellow]")
+        elif previous:
+            thread_id = previous
+    last_thread_file().write_text(thread_id)
+    gs = GraphSession(graph, thread_id, policy, workspace=workspace)
     console.print(f"[dim]Graph engine | thread {thread_id} | approval needed for: "
                   f"{'nothing (--yes)' if approve_all else ', '.join(sorted(policy.ask_tools))}[/dim]")
     snapshot = await gs.state()
@@ -110,13 +118,13 @@ def _show_approval(calls: list[dict]) -> None:
 
 
 def _show_turn(result) -> None:
+    if result.resumed_in_flight:
+        call = result.resumed_in_flight[0]
+        console.print(f"[yellow]Resumed. The call {call['name']} ({call['id']}) may already have run before the interruption.[/yellow]")
     if result.status == "awaiting_approval":
         console.print("[yellow]Waiting for approval:[/yellow]")
         _show_approval(result.approval)
         return
-    if result.resumed_in_flight:
-        call = result.resumed_in_flight[0]
-        console.print(f"[yellow]Resumed. The call {call['name']} ({call['id']}) may already have run before the interruption.[/yellow]")
     console.print()
     console.print(Markdown(result.text or "(no answer)"))
     if result.status in ("unverified", "budget_exhausted"):
@@ -124,13 +132,20 @@ def _show_turn(result) -> None:
     console.print(Rule(style="dim"))
 
 
-async def _handle_graph_slash(cmd: str, gs) -> bool:
+async def _handle_graph_slash(cmd: str, gs, conv: Conversation) -> bool:
     """Handle the graph-only commands. Returns True when the command was one of them."""
     parts = cmd.split(maxsplit=1)
     command, arg = parts[0].lower(), (parts[1] if len(parts) > 1 else "")
-    if command not in ("/approve", "/reject", "/resume", "/plan", "/thread"):
+    if command not in ("/approve", "/reject", "/resume", "/plan", "/thread", "/clear"):
         return False
     try:
+        if command == "/clear":
+            gs.new_thread()
+            from odyssey.engine.session import last_thread_file
+            last_thread_file().write_text(gs.thread_id)
+            conv.messages.clear()
+            console.print(f"[dim]Conversation cleared. New thread {gs.thread_id}.[/dim]")
+            return True
         if command == "/approve":
             _show_turn(await gs.decide(True, always=arg.strip() == "always"))
         elif command == "/reject":
@@ -144,7 +159,13 @@ async def _handle_graph_slash(cmd: str, gs) -> bool:
             console.print(f"[dim]Thread {gs.thread_id}. Restart with `odyssey --engine graph --resume` to continue it.[/dim]")
     except RuntimeError as e:
         console.print(f"[red]{e}[/red]")
+    await _sync_conv(conv, gs)
     return True
+
+
+async def _sync_conv(conv: Conversation, gs) -> None:
+    """Mirror the graph thread's messages into ``conv`` so /history, /save and /status see them."""
+    conv.messages[:] = (await gs.state()).get("messages", [])
 
 
 async def _repl_loop(conv: Conversation, gs) -> None:
@@ -168,7 +189,7 @@ async def _repl_loop(conv: Conversation, gs) -> None:
             cmd = text.strip()
 
             if cmd.startswith("/"):
-                if gs is not None and await _handle_graph_slash(cmd, gs):
+                if gs is not None and await _handle_graph_slash(cmd, gs, conv):
                     continue
                 result = await _handle_slash(cmd, conv)
                 if result == "exit":
@@ -187,6 +208,7 @@ async def _repl_loop(conv: Conversation, gs) -> None:
                     _show_turn(await gs.submit(cmd))
                 except RuntimeError as e:
                     console.print(f"[red]{e}[/red]")
+                await _sync_conv(conv, gs)
                 continue
             result = await run_tool_loop(cmd, conv)
             console.print()
