@@ -21,9 +21,12 @@ dependencies = [
 [project.optional-dependencies]
 # Completion gate: `odyssey --engine graph --verify "pytest -q"` records each check in a ledger.
 verify = ["transactional-agent-ledger>=0.1.0"]
+# Evaluation: export a thread's tool calls as a trajectory-replay cassette (`/cassette`).
+eval = ["trajectory-replay>=0.1.0"]
 
 [tool.uv.sources]
 transactional-agent-ledger = { git = "https://github.com/RockENZO/transactional-agent-ledger", rev = "bf89fab" }
+trajectory-replay = { git = "https://github.com/RockENZO/trajectory-replay", rev = "00d6c1e" }
 
 [project.scripts]
 odyssey = "odyssey.cli.app:app"
