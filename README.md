@@ -2,6 +2,21 @@
 
 A local-first AI agent that runs in your terminal. Uses a configurable Ollama endpoint for model inference, with local SQLite and ChromaDB persistence and tools for coding, web research, tasks and memory.
 
+## Recorded demo
+
+![Odyssey creates a Python function and verifies it with a real tool call](docs/demo/odyssey-demo.gif)
+
+A genuine CLI session using local `qwen3.8:27b-mlx`: the agent writes `greet.py`,
+runs a Python assertion through its `bash` tool, and receives
+`PASS: greeting verified`. Recorded from commit `c0137fa` on 2 November 2026 in a
+disposable workspace. Idle gaps are shortened and viewing holds are added; this
+is a functional demonstration, not a latency benchmark.
+
+[Video (MP4)](docs/demo/odyssey-demo.mp4) ·
+[Original terminal recording](docs/demo/session.cast) ·
+[Saved tool results](docs/demo/tool-trace.jsonl) ·
+[Recording details](docs/demo/README.md)
+
 ## Features
 
 - **Interactive REPL** — `uv run odyssey` drops you into a continuous `> ` prompt. Chat back and forth, the AI uses tools autonomously.

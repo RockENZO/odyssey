@@ -1,0 +1,8 @@
+{
+  "model": "qwen3.8:27b-mlx",
+  "elapsed_seconds": 36.84,
+  "real_cli": true,
+  "prompt_submitted": true,
+  "graceful_exit": true,
+  "source_commit": "c0137fa374cf02b99d5528056e0fc6cb64fab54c"
+}
