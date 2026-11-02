@@ -115,3 +115,46 @@ def test_a_live_model_report_has_no_oracle_banner():
     env = runner.environment("some-model", "model")
     text = runner.render_markdown(env, [], runner.summarize([]))
     assert "not a model result" not in text
+
+
+def test_the_model_gets_file_tools_only_and_the_registry_is_restored(tmp_path):
+    from odyssey.tools.registry import get_all_tools, init_tools
+
+    init_tools()
+    before = sorted(t.name for t in get_all_tools())
+    offered = []
+
+    def spy(_task):
+        from odyssey.tools.registry import get_all_tools as live
+
+        async def chat(messages):
+            offered.append(sorted(t.name for t in live()))
+            return {"message": {"content": "no changes"}}
+
+        return chat
+
+    run_suite(tmp_path, spy, get_tasks(["fizzbuzz"]))
+    assert set(offered[0]) == set(runner.EVAL_TOOLS)
+    assert "bash" not in offered[0] and "save_memory" not in offered[0] and "web_search" not in offered[0]
+    assert sorted(t.name for t in get_all_tools()) == before
+
+
+def test_a_model_cannot_run_the_shell_unless_allowed(tmp_path):
+    marker = tmp_path / "pwned"
+
+    def shell_user(_task):
+        queue = [
+            {"tool_calls": [{"function": {"name": "bash", "arguments": {"command": f"touch {marker}"}}}]},
+            {"content": "done"},
+        ]
+
+        async def chat(messages):
+            return {"message": queue.pop(0) if queue else {"content": "done"}}
+
+        return chat
+
+    _, report = run_suite(tmp_path / "a", shell_user, get_tasks(["fizzbuzz"]))
+    assert not marker.exists(), "the shell must not run by default"
+    _, allowed = run_suite(tmp_path / "b", shell_user, get_tasks(["fizzbuzz"]), tools=runner.EVAL_TOOLS + ("bash",))
+    assert marker.exists(), "--allow-bash should give the model the shell"
+    assert "bash" in json.loads((tmp_path / "b" / "out" / "report.json").read_text())["environment"]["tools"]

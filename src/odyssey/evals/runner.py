@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import json
 import platform
 import shutil
@@ -36,6 +37,27 @@ from langgraph.checkpoint.memory import MemorySaver
 from odyssey.evals.suite import CHECK, SUITE_HASH, SUITE_VERSION, Task, get_tasks, suite_hash
 
 ChatFn = Callable[[list[dict[str, Any]]], Awaitable[dict[str, Any]]]
+
+# The tools an evaluated model gets. No shell, no web, and none of the tools that write to the
+# user's own memory, journal or task list: a model runs unattended and approvals are off. The
+# gate runs the tests and hands failures back, so the model does not need a shell to iterate.
+# ``--allow-bash`` adds the shell back; it is not sandboxed.
+EVAL_TOOLS = ("read", "write", "edit", "glob", "grep", "todo_write")
+
+
+@contextlib.contextmanager
+def only_tools(names):
+    """Offer the model only these tools while the block runs; the registry is restored after."""
+    from odyssey.tools import registry
+
+    saved = dict(registry._tools)
+    registry._tools.clear()
+    registry._tools.update({n: t for n, t in saved.items() if n in names})
+    try:
+        yield
+    finally:
+        registry._tools.clear()
+        registry._tools.update(saved)
 
 
 @dataclass
@@ -91,6 +113,7 @@ async def run_task(
     gold: list | None = None,
     max_repairs: int = 2,
     keep: bool = False,
+    tools: tuple[str, ...] = EVAL_TOOLS,
 ) -> tuple[TaskResult, list]:
     """Run one task. Returns the result and the executed tool calls as cassette steps."""
     from agent_ledger import ExpectedStateVerifier
@@ -128,7 +151,8 @@ async def run_task(
     gate_status, error = "error", ""
     try:
         try:
-            turn = await asyncio.wait_for(session.submit(task.prompt), timeout)
+            with only_tools(tools):
+                turn = await asyncio.wait_for(session.submit(task.prompt), timeout)
             gate_status = turn.status
         except asyncio.TimeoutError:
             gate_status = "timeout"
@@ -206,6 +230,7 @@ def render_markdown(env: dict[str, Any], results: list[TaskResult], summary: dic
     lines += [
         f"- Date: {env['date']}",
         f"- Device: {env['device']}",
+        f"- Tools offered to the model: {', '.join(env.get('tools', []))}" + ("" if "bash" not in env.get("tools", []) else " (the shell is not sandboxed)"),
         f"- Suite: version {env['suite']['version']}, hash `{env['suite']['hash'][:12]}`"
         + ("" if env["suite"]["frozen_hash_matches"] else " **(does not match the frozen hash)**"),
         "- Packages: " + ", ".join(f"{k} {v}" for k, v in env["packages"].items()),
@@ -237,6 +262,7 @@ async def run_suite(
     kind: str,
     timeout: float = 600.0,
     with_gold: bool = True,
+    tools: tuple[str, ...] = EVAL_TOOLS,
 ) -> dict[str, Any]:
     out_dir.mkdir(parents=True, exist_ok=True)
     results: list[TaskResult] = []
@@ -248,11 +274,12 @@ async def run_suite(
                 gold = await gold_trajectory(task, out_dir / "gold-scratch")
             except ImportError:
                 gold = None
-        result, _ = await run_task(task, chat_for(task), out_dir, timeout=timeout, gold=gold)
+        result, _ = await run_task(task, chat_for(task), out_dir, timeout=timeout, gold=gold, tools=tools)
         results.append(result)
         print(f"{task.id:18} passed={result.passed!s:5} gate={result.gate:16} tools={result.tool_calls:3} {result.seconds:7.1f}s", flush=True)
     shutil.rmtree(out_dir / "gold-scratch", ignore_errors=True)
     env = environment(model, kind)
+    env["tools"] = list(tools)
     summary = summarize(results)
     report = {"environment": env, "summary": summary, "results": [asdict(r) for r in results]}
     (out_dir / "report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
@@ -279,6 +306,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--tasks", help="comma-separated task ids (default: all)")
     parser.add_argument("--model", help="Ollama model (default: the configured fast model)")
     parser.add_argument("--timeout", type=float, default=600.0, help="seconds per task")
+    parser.add_argument("--allow-bash", action="store_true", help="also give the model the shell (not sandboxed; the default is file tools only)")
     parser.add_argument("--oracle", action="store_true", help="scripted reference solution instead of a model (not a model result)")
     parser.add_argument("--lazy", action="store_true", help="scripted model that changes nothing (the checks must fail)")
     args = parser.parse_args(argv)
@@ -301,7 +329,8 @@ def main(argv: list[str] | None = None) -> int:
         def chat_for(task, _chat=partial(chat_completion, model=model, temperature=0.0)):
             return _chat
 
-    report = asyncio.run(run_suite(tasks, chat_for, args.out, model=name, kind=kind, timeout=args.timeout))
+    tools = EVAL_TOOLS + ("bash",) if args.allow_bash else EVAL_TOOLS
+    report = asyncio.run(run_suite(tasks, chat_for, args.out, model=name, kind=kind, timeout=args.timeout, tools=tools))
     print(json.dumps(report["summary"]))
     return 0
 
