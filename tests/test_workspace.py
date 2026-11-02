@@ -1,6 +1,7 @@
 """File and search tools stay inside the workspace root once one is set."""
 import asyncio
 import os
+import shutil
 
 import pytest
 
@@ -104,6 +105,7 @@ def test_glob_treats_glob_characters_in_the_base_directory_literally(tmp_path):
     assert "page.py" in run(search_tools.glob("*.py"))
 
 
+@pytest.mark.skipif(shutil.which("rg") is None, reason="ripgrep not installed")
 def test_grep_does_not_follow_symlinks_even_if_ripgrep_config_says_so(tmp_path, monkeypatch):
     root = tmp_path / "root"
     outside = tmp_path / "outside"
