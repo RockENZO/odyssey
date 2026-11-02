@@ -14,6 +14,7 @@ from rich.rule import Rule
 from odyssey.config import get_config_dir, get_data_dir
 from odyssey.core.state import Conversation
 from odyssey.core.tool_loop import run_tool_loop
+from odyssey.core.workspace import ALLOW_OUTSIDE_ENV, set_workspace_root
 from odyssey.llm.client import get_fast_model
 from odyssey.tools.registry import init_tools
 
@@ -43,7 +44,14 @@ Prefix a command with `!` to run it directly in the shell without AI interpretat
 
 async def run_repl(cwd: str) -> None:
     init_tools()
-    conv = Conversation(working_dir=cwd, project_root=_find_project_root(cwd))
+    project_root = _find_project_root(cwd)
+    conv = Conversation(working_dir=cwd, project_root=project_root)
+    if os.environ.get(ALLOW_OUTSIDE_ENV) == "1":
+        set_workspace_root(None)
+    else:
+        set_workspace_root(project_root)
+    from odyssey.tools import bash as bash_tool
+    bash_tool._working_dir = cwd
     history_file = get_config_dir() / "history.txt"
     history_file.parent.mkdir(parents=True, exist_ok=True)
 
@@ -55,7 +63,8 @@ async def run_repl(cwd: str) -> None:
 
     console.print(Panel.fit(
         "[bold blue]Odyssey[/bold blue] — Your AI Agent\n"
-        f"[dim]Model: {get_fast_model()} | Type /help for commands | Ctrl+C to exit[/dim]",
+        f"[dim]Model: {get_fast_model()} | Type /help for commands | Ctrl+C to exit[/dim]\n"
+        f"[dim]Workspace: {project_root if os.environ.get(ALLOW_OUTSIDE_ENV) != '1' else 'unrestricted'} (bash is not sandboxed)[/dim]",
         border_style="blue",
     ))
     console.print()

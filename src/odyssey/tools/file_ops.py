@@ -1,9 +1,7 @@
 import os
 from pathlib import Path
 
-
-def _resolve_path(path: str) -> str:
-    return os.path.abspath(os.path.expanduser(path))
+from odyssey.core.workspace import WorkspaceError, resolve_path as _resolve_path
 
 
 async def read_file(path: str, offset: int = 0, limit: int = 2000) -> str:
@@ -24,6 +22,8 @@ async def read_file(path: str, offset: int = 0, limit: int = 2000) -> str:
         if end < total:
             output += f"\n... ({total - end} more lines)"
         return output
+    except WorkspaceError as e:
+        return f"Error: {e}"
     except Exception as e:
         return f"Error reading file: {e}"
 
@@ -37,6 +37,8 @@ async def write_file(path: str, content: str) -> str:
         with open(fpath, "w") as f:
             f.write(content)
         return f"Written {len(content)} bytes to {path}"
+    except WorkspaceError as e:
+        return f"Error: {e}"
     except Exception as e:
         return f"Error writing file: {e}"
 
@@ -57,5 +59,7 @@ async def edit_file(path: str, old_string: str, new_string: str) -> str:
         with open(fpath, "w") as f:
             f.write(content)
         return f"Applied edit to {path} ({len(old_string)} chars → {len(new_string)} chars)"
+    except WorkspaceError as e:
+        return f"Error: {e}"
     except Exception as e:
         return f"Error editing file: {e}"

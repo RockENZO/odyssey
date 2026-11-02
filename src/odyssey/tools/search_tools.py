@@ -2,27 +2,38 @@ import os
 import subprocess
 from pathlib import Path
 
+from odyssey.core.workspace import WorkspaceError, get_workspace_root, resolve_path
+
 
 async def glob(pattern: str, path: str | None = None) -> str:
     try:
         import glob as glob_mod
-        search_path = path or "."
+        root = get_workspace_root()
+        search_path = resolve_path(path or str(root or "."))
         full_pattern = os.path.join(search_path, pattern)
         matches = glob_mod.glob(full_pattern, recursive=True)
         if not matches:
             return "No files found matching that pattern."
+        if root is not None:
+            matches = [m for m in matches if Path(os.path.realpath(m)) == root
+                       or root in Path(os.path.realpath(m)).parents]
+            if not matches:
+                return "No files found matching that pattern."
         matches.sort()
         result = "\n".join(matches)
         if len(matches) > 100:
             result = result + f"\n... and {len(matches) - 100} more matches"
         return result
+    except WorkspaceError as e:
+        return f"Error: {e}"
     except Exception as e:
         return f"Error in glob: {e}"
 
 
 async def grep(pattern: str, path: str | None = None, include: str | None = None) -> str:
     try:
-        search_path = path or os.getcwd()
+        root = get_workspace_root()
+        search_path = resolve_path(path or str(root or os.getcwd()))
         cmd = ["rg", "-n", "--no-heading", pattern, search_path]
         if include:
             cmd.extend(["--type", include] if include == "py" or include == "js" else ["--glob", f"*.{include}"])
@@ -42,6 +53,8 @@ async def grep(pattern: str, path: str | None = None, include: str | None = None
             return "No matches found."
         else:
             return f"Error running rg: {result.stderr.strip()}"
+    except WorkspaceError as e:
+        return f"Error: {e}"
     except FileNotFoundError:
         return "Error: ripgrep (rg) not found. Install it with 'brew install ripgrep'"
     except Exception as e:

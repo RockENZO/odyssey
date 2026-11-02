@@ -66,6 +66,16 @@ $ uv run odyssey
 | `todo_write` | Track multi-step progress |
 | `task` | Spawn sub-agents for parallel work |
 
+## What the agent can and cannot do today
+
+- **Workspace boundary.** In the REPL the `read`, `write`, `edit`, `glob` and `grep` tools are confined to the project root (the nearest parent with a `.git` directory, otherwise the launch directory). Paths outside it, including symlinks that point outside, are refused. Set `ODYSSEY_ALLOW_OUTSIDE_WORKSPACE=1` to lift this. **`bash` is not sandboxed and is not covered by the boundary**; it starts in the launch directory and can reach anything your user can.
+- **Tool-call ids.** Every tool call gets an id, and its result is stored with that id and the tool name. Executed calls are also kept in `Conversation.tool_log` with arguments, result and duration.
+- **No resume yet.** The conversation lives in memory. `/save` writes a jsonl copy for reading; there is no way to continue a session or a half-finished task after the process exits.
+- **No acceptance check.** A task ends when the model answers without calling a tool. Nothing runs the tests for it.
+- **`todo_write` is a text echo.** It returns the list it was given and keeps no state.
+- **Sub-agents are sequential.** `task` runs the same loop again in a fresh conversation, with the same tools and shell; it has no separate workspace or permissions.
+- **`langgraph` is declared but not used yet.** It is a dependency for the planned graph-based engine, not part of the current loop.
+
 ## Quick Start
 
 ### Prerequisites
@@ -145,7 +155,7 @@ The only persistent background process is **Ollama** itself (`ollama serve`), wh
 ```
 src/odyssey/
 ├── cli/           # REPL entry point (prompt_toolkit)
-├── core/          # Tool-calling loop, conversation state
+├── core/          # Tool-calling loop, conversation state, tool-call ids, workspace boundary
 ├── tools/         # 17 tool implementations
 │   ├── bash.py          # shell execution
 │   ├── file_ops.py      # read, write, edit
@@ -176,8 +186,9 @@ src/odyssey/
 
 ## Startup and persistence regression tests
 
-These isolated tests exercise real SQLite persistence, first-run directories and the
-installed CLI without downloading a model or contacting Ollama:
+These isolated tests exercise real SQLite persistence, first-run directories, the installed CLI,
+the workspace boundary and the tool loop (driven by a scripted fake model) without downloading a
+model or contacting Ollama. CI installs the full locked environment and runs the whole suite:
 
 ```bash
 uv sync --group dev
