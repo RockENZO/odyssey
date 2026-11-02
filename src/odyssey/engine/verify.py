@@ -27,8 +27,10 @@ from typing import Any, Sequence
 
 from odyssey.engine.graph import Acceptance
 
-# Calls that can change the project. ``bash`` counts because it may.
-CHANGING_TOOLS = frozenset({"bash", "write", "edit"})
+# Calls that can change the project. ``bash`` counts because it may. So does ``task``: a sub-agent
+# runs its own tool calls, which the graph's tool log does not list, so a turn that only
+# delegated is checked too.
+CHANGING_TOOLS = frozenset({"bash", "write", "edit", "task"})
 
 
 def ledger_gate(

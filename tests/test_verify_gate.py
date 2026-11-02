@@ -132,3 +132,23 @@ def test_verify_needs_the_graph_engine():
 
     result = CliRunner().invoke(app_module.app, ["--verify", "pytest -q"])
     assert result.exit_code != 0 and "graph engine" in result.output
+
+
+def test_a_turn_that_only_delegated_is_still_checked(tmp_path, monkeypatch):
+    """A sub-agent's own calls are not in the graph's tool log, so `task` itself counts as a change."""
+    from odyssey.core import tool_loop
+
+    replies = [{"tool_calls": [call("write", path="out.txt", content="wrong")]}, {"content": "sub done"}]
+
+    async def sub_chat(messages):
+        return {"message": replies.pop(0)}
+
+    monkeypatch.setattr(tool_loop, "chat_completion", sub_chat)
+    chat = scripted({"tool_calls": [call("task", description="write out.txt")]}, {"content": "delegated"},
+                    {"content": "still done"}, {"content": "really done"})
+    result = run(session(tmp_path, chat).submit("delegate"))
+    assert (tmp_path / "out.txt").read_text() == "wrong"      # the sub-agent changed the project (approve_all)
+    assert result.status == "unverified", "the failing check must not be skipped"
+    ledger = ledger_of(tmp_path)
+    assert ledger.rejected_count() == 3
+    ledger.close()
