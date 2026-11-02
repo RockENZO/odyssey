@@ -38,11 +38,18 @@ def _repl_cmd_help() -> str:
   /history        Show recent conversation
   /save           Save memories to file
 
+Graph engine only (`odyssey --engine graph`):
+  /approve [always]   Run the tool call that is waiting for approval
+  /reject [reason]    Refuse it; the model is told why
+  /resume             Continue a turn that was interrupted
+  /plan               Show the structured plan (todo_write)
+  /thread             Show this session's thread id
+
 Prefix a command with `!` to run it directly in the shell without AI interpretation.
 """
 
 
-async def run_repl(cwd: str) -> None:
+async def run_repl(cwd: str, engine: str = "loop", resume: bool = False, approve_all: bool = False) -> None:
     init_tools()
     project_root = _find_project_root(cwd)
     conv = Conversation(working_dir=cwd, project_root=project_root)
@@ -52,14 +59,6 @@ async def run_repl(cwd: str) -> None:
         set_workspace_root(project_root, base=cwd)
     from odyssey.tools import bash as bash_tool
     bash_tool._working_dir = cwd
-    history_file = get_config_dir() / "history.txt"
-    history_file.parent.mkdir(parents=True, exist_ok=True)
-
-    session: PromptSession = PromptSession(
-        history=FileHistory(str(history_file)),
-        style=style,
-        enable_history_search=True,
-    )
 
     console.print(Panel.fit(
         "[bold blue]Odyssey[/bold blue] — Your AI Agent\n"
@@ -69,10 +68,97 @@ async def run_repl(cwd: str) -> None:
     ))
     console.print()
 
+    if engine == "graph":
+        from odyssey.engine.session import default_db_path, open_checkpointer
+        async with open_checkpointer(default_db_path()) as saver:
+            gs = await _start_graph_session(saver, resume, approve_all)
+            await _repl_loop(conv, gs)
+    else:
+        await _repl_loop(conv, None)
+
+
+async def _start_graph_session(saver, resume: bool, approve_all: bool):
+    from odyssey.engine.graph import build_graph
+    from odyssey.engine.policy import ApprovalPolicy
+    from odyssey.engine.session import GraphSession, last_thread_file, new_thread_id
+    from odyssey.llm.client import chat_completion
+
+    thread_id = new_thread_id()
+    if resume and last_thread_file().exists():
+        thread_id = last_thread_file().read_text().strip() or thread_id
+    last_thread_file().write_text(thread_id)
+    policy = ApprovalPolicy(approve_all=approve_all)
+    gs = GraphSession(build_graph(chat_completion, checkpointer=saver, policy=policy), thread_id, policy)
+    console.print(f"[dim]Graph engine | thread {thread_id} | approval needed for: "
+                  f"{'nothing (--yes)' if approve_all else ', '.join(sorted(policy.ask_tools))}[/dim]")
+    snapshot = await gs.state()
+    if resume and snapshot:
+        pending = await gs.pending_approval()
+        if pending:
+            console.print("[yellow]This thread is waiting for approval:[/yellow]")
+            _show_approval(pending)
+        elif (await gs._snapshot()).next:
+            console.print("[yellow]The last turn did not finish. Type /resume to continue it.[/yellow]")
+    return gs
+
+
+def _show_approval(calls: list[dict]) -> None:
+    for call in calls:
+        args = " ".join(f"{k}={str(v)[:200]!r}" for k, v in call["arguments"].items())
+        console.print(f"  [bold]{call['name']}[/bold] {args}  [dim]({call['id']})[/dim]")
+    console.print("[dim]/approve [always] to run it, /reject [reason] to refuse it.[/dim]")
+
+
+def _show_turn(result) -> None:
+    if result.status == "awaiting_approval":
+        console.print("[yellow]Waiting for approval:[/yellow]")
+        _show_approval(result.approval)
+        return
+    if result.resumed_in_flight:
+        call = result.resumed_in_flight[0]
+        console.print(f"[yellow]Resumed. The call {call['name']} ({call['id']}) may already have run before the interruption.[/yellow]")
+    console.print()
+    console.print(Markdown(result.text or "(no answer)"))
+    if result.status in ("unverified", "budget_exhausted"):
+        console.print(f"[yellow]Status: {result.status}[/yellow]")
+    console.print(Rule(style="dim"))
+
+
+async def _handle_graph_slash(cmd: str, gs) -> bool:
+    """Handle the graph-only commands. Returns True when the command was one of them."""
+    parts = cmd.split(maxsplit=1)
+    command, arg = parts[0].lower(), (parts[1] if len(parts) > 1 else "")
+    if command not in ("/approve", "/reject", "/resume", "/plan", "/thread"):
+        return False
+    try:
+        if command == "/approve":
+            _show_turn(await gs.decide(True, always=arg.strip() == "always"))
+        elif command == "/reject":
+            _show_turn(await gs.decide(False, reason=arg.strip()))
+        elif command == "/resume":
+            _show_turn(await gs.resume())
+        elif command == "/plan":
+            from odyssey.engine.todos import format_todos
+            console.print(format_todos((await gs.state()).get("todos", [])))
+        else:
+            console.print(f"[dim]Thread {gs.thread_id}. Restart with `odyssey --engine graph --resume` to continue it.[/dim]")
+    except RuntimeError as e:
+        console.print(f"[red]{e}[/red]")
+    return True
+
+
+async def _repl_loop(conv: Conversation, gs) -> None:
+    history_file = get_config_dir() / "history.txt"
+    history_file.parent.mkdir(parents=True, exist_ok=True)
+    prompt: PromptSession = PromptSession(
+        history=FileHistory(str(history_file)),
+        style=style,
+        enable_history_search=True,
+    )
     try:
         while True:
             try:
-                text = await session.prompt_async("> ", vi_mode=True)
+                text = await prompt.prompt_async("> ", vi_mode=True)
             except EOFError:
                 break
 
@@ -82,6 +168,8 @@ async def run_repl(cwd: str) -> None:
             cmd = text.strip()
 
             if cmd.startswith("/"):
+                if gs is not None and await _handle_graph_slash(cmd, gs):
+                    continue
                 result = await _handle_slash(cmd, conv)
                 if result == "exit":
                     break
@@ -94,6 +182,12 @@ async def run_repl(cwd: str) -> None:
                 continue
 
             console.print(Rule(style="dim"))
+            if gs is not None:
+                try:
+                    _show_turn(await gs.submit(cmd))
+                except RuntimeError as e:
+                    console.print(f"[red]{e}[/red]")
+                continue
             result = await run_tool_loop(cmd, conv)
             console.print()
             console.print(Markdown(result))
