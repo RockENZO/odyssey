@@ -1,9 +1,17 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Callable, Awaitable
 
 from odyssey.tools import web, memory, task_manager, journal_tools
 from odyssey.tools import bash as bash_mod, file_ops, search_tools, sub_agent
+
+
+@dataclass
+class ToolOutcome:
+    """A tool's output text and whether it succeeded, when the tool can say so itself."""
+    text: str
+    ok: bool
 
 
 class Tool:
@@ -19,11 +27,19 @@ class Tool:
         self.fn = fn
         self.parameters = parameters or {}
 
-    async def run(self, **kwargs: Any) -> str:
+    async def execute(self, **kwargs: Any) -> ToolOutcome:
+        """Run the tool. Tools that return a ``ToolOutcome`` report their own success; for the
+        rest, an output starting with "Error" counts as a failure."""
         try:
-            return await self.fn(**kwargs)
+            result = await self.fn(**kwargs)
         except Exception as e:
-            return f"Error executing {self.name}: {e}"
+            return ToolOutcome(f"Error executing {self.name}: {e}", False)
+        if isinstance(result, ToolOutcome):
+            return result
+        return ToolOutcome(result, not result.startswith("Error"))
+
+    async def run(self, **kwargs: Any) -> str:
+        return (await self.execute(**kwargs)).text
 
     def to_openai_tool(self) -> dict[str, Any]:
         return {
@@ -34,6 +50,11 @@ class Tool:
                 "parameters": self.parameters or {},
             },
         }
+
+
+async def _bash(command: str, timeout: int = 120) -> ToolOutcome:
+    text, ok = await bash_mod.run_bash(command, timeout)
+    return ToolOutcome(text, ok)
 
 
 _tools: dict[str, Tool] = {}
@@ -59,7 +80,7 @@ def init_tools() -> None:
     register(Tool(
         name="bash",
         description="Execute a shell command in a persistent bash session. Use for running commands, git operations, builds, tests, and scripts. The working directory is preserved between calls.",
-        fn=bash_mod.bash,
+        fn=_bash,
         parameters={
             "type": "object",
             "properties": {

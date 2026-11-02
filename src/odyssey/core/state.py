@@ -1,6 +1,19 @@
 from dataclasses import dataclass, field
 from typing import Any
 
+from odyssey.core.tool_calls import ToolCall, parse_tool_calls
+
+
+@dataclass
+class ToolRecord:
+    """One executed tool call, kept outside the model context as evidence."""
+    call_id: str
+    name: str
+    arguments: dict[str, Any]
+    result: str
+    ok: bool
+    duration_s: float
+
 
 @dataclass
 class Conversation:
@@ -8,35 +21,23 @@ class Conversation:
     max_tool_rounds: int = 20
     project_root: str = ""
     working_dir: str = ""
+    tool_log: list[ToolRecord] = field(default_factory=list)
 
     def add_message(self, role: str, content: str, **extra: Any) -> None:
         msg: dict[str, Any] = {"role": role, "content": content}
         for k, v in extra.items():
             if k == "tool_calls" and v is not None:
-                serialized = []
-                for tc in v:
-                    if hasattr(tc, "function"):
-                        fn = tc.function
-                        args = fn.arguments
-                        if hasattr(args, "model_dump"):
-                            args = args.model_dump()
-                        serialized.append({
-                            "function": {"name": fn.name, "arguments": args},
-                            "id": getattr(tc, "id", None) or fn.name,
-                            "type": "function",
-                        })
-                    else:
-                        serialized.append(tc)
-                msg["tool_calls"] = serialized
+                calls = v if all(isinstance(c, ToolCall) for c in v) else parse_tool_calls(v)
+                msg["tool_calls"] = [c.to_message() for c in calls]
             else:
                 msg[k] = v
         self.messages.append(msg)
 
-    def add_tool_result(self, tool_name: str, content: str) -> None:
-        self.messages.append({
-            "role": "tool",
-            "content": content,
-        })
+    def add_tool_result(self, tool_name: str, content: str, tool_call_id: str | None = None) -> None:
+        msg: dict[str, Any] = {"role": "tool", "content": content, "tool_name": tool_name}
+        if tool_call_id:
+            msg["tool_call_id"] = tool_call_id
+        self.messages.append(msg)
 
     def last_user_message(self) -> str:
         for msg in reversed(self.messages):

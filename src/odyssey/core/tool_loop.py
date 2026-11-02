@@ -1,10 +1,12 @@
-from typing import Any
+import time
+from typing import Any, Awaitable, Callable
 
 from rich.markdown import Markdown
 from rich.console import Console
 
 from odyssey.llm.client import chat_completion
-from odyssey.core.state import Conversation
+from odyssey.core.state import Conversation, ToolRecord
+from odyssey.core.tool_calls import ToolCall, parse_tool_calls
 from odyssey.tools.registry import get_tool
 from odyssey.config import get_data_dir
 
@@ -30,50 +32,49 @@ Guidelines:
 """
 
 
-async def run_tool_loop(user_input: str, conv: Conversation) -> str:
+ChatFn = Callable[[list[dict[str, Any]]], Awaitable[dict[str, Any]]]
+
+MAX_TOOL_RESULT_CHARS = 10000
+
+
+async def execute_tool_call(call: ToolCall, conv: Conversation) -> None:
+    """Run one tool call and record the result, with the call's id, on the conversation."""
+    tool = get_tool(call.name)
+    if tool is None:
+        result, ok, duration = f"Error: tool '{call.name}' not found", False, 0.0
+    else:
+        _show_tool_call(call.name, call.arguments)
+        started = time.monotonic()
+        outcome = await tool.execute(**call.arguments)
+        result, ok = outcome.text, outcome.ok
+        duration = time.monotonic() - started
+    conv.add_tool_result(call.name, result[:MAX_TOOL_RESULT_CHARS], tool_call_id=call.id)
+    conv.tool_log.append(ToolRecord(call.id, call.name, call.arguments, result, ok, duration))
+
+
+async def run_tool_loop(user_input: str, conv: Conversation, chat: ChatFn | None = None) -> str:
+    """Run the model/tool loop until the model answers without calling a tool.
+
+    ``chat`` replaces the model call; tests pass a scripted function so the loop runs
+    without Ollama.
+    """
+    chat = chat or chat_completion
     conv.add_message("user", user_input)
     messages = _build_messages(conv)
 
     for _ in range(conv.max_tool_rounds):
-        response = await chat_completion(messages)
+        response = await chat(messages)
         msg = response["message"]
         content = msg.get("content", "") or ""
-        tool_calls = msg.get("tool_calls")
+        calls = parse_tool_calls(msg.get("tool_calls"))
 
-        if not tool_calls:
+        if not calls:
             conv.add_message("assistant", content)
             return content
 
-        if content:
-            content = ""
-        conv.add_message("assistant", content, tool_calls=tool_calls)
-
-        for tc in tool_calls:
-            if isinstance(tc, dict):
-                fn = tc.get("function", {})
-                fn_name = fn.get("name", "")
-                fn_args = fn.get("arguments", {})
-            else:
-                fn_name = tc.function.name
-                fn_args = tc.function.arguments
-                if hasattr(fn_args, "model_dump"):
-                    fn_args = fn_args.model_dump()
-
-            if isinstance(fn_args, str):
-                import json
-                try:
-                    fn_args = json.loads(fn_args)
-                except json.JSONDecodeError:
-                    fn_args = {}
-
-            tool = get_tool(fn_name)
-            if tool:
-                _show_tool_call(fn_name, fn_args)
-                result = await tool.run(**fn_args)
-                conv.add_tool_result(tool.name, result[:10000])
-            else:
-                conv.add_tool_result(fn_name, f"Error: tool '{fn_name}' not found")
-
+        conv.add_message("assistant", "", tool_calls=calls)
+        for call in calls:
+            await execute_tool_call(call, conv)
         messages = _build_messages(conv)
 
     timeout_msg = "Reached maximum tool call iterations. Try breaking your request into smaller steps."
