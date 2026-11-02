@@ -10,7 +10,8 @@ async def glob(pattern: str, path: str | None = None) -> str:
         import glob as glob_mod
         root = get_workspace_root()
         search_path = resolve_path(path or ".")
-        full_pattern = os.path.join(search_path, pattern)
+        # The base directory is literal text; only the user's pattern may use wildcards.
+        full_pattern = os.path.join(glob_mod.escape(search_path), pattern)
         matches = glob_mod.glob(full_pattern, recursive=True)
         if not matches:
             return "No files found matching that pattern."
@@ -34,7 +35,9 @@ async def grep(pattern: str, path: str | None = None, include: str | None = None
     try:
         root = get_workspace_root()
         search_path = resolve_path(path or ".")
-        cmd = ["rg", "-n", "--no-heading", pattern, search_path]
+        # --no-follow overrides a --follow inherited from RIPGREP_CONFIG_PATH, so
+        # symlinks inside the workspace cannot lead the search outside it.
+        cmd = ["rg", "-n", "--no-heading", "--no-follow", pattern, search_path]
         if include:
             cmd.extend(["--type", include] if include == "py" or include == "js" else ["--glob", f"*.{include}"])
         result = subprocess.run(

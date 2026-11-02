@@ -94,3 +94,27 @@ def test_relative_paths_use_the_launch_directory_like_bash(tmp_path):
     # the boundary is still the repository root
     assert "outside the workspace" in run(file_ops.read_file("../../escape.txt"))
     assert "root config" in run(file_ops.read_file("../config.txt"))
+
+
+def test_glob_treats_glob_characters_in_the_base_directory_literally(tmp_path):
+    root = tmp_path / "[slug]"
+    root.mkdir()
+    (root / "page.py").write_text("x\n")
+    workspace.set_workspace_root(root)
+    assert "page.py" in run(search_tools.glob("*.py"))
+
+
+def test_grep_does_not_follow_symlinks_even_if_ripgrep_config_says_so(tmp_path, monkeypatch):
+    root = tmp_path / "root"
+    outside = tmp_path / "outside"
+    root.mkdir()
+    outside.mkdir()
+    (outside / "secret.txt").write_text("needle\n")
+    (root / "link").symlink_to(outside)
+    (root / "own.txt").write_text("needle\n")
+    cfg = tmp_path / "rg.conf"
+    cfg.write_text("--follow\n")
+    monkeypatch.setenv("RIPGREP_CONFIG_PATH", str(cfg))
+    workspace.set_workspace_root(root)
+    out = run(search_tools.grep("needle"))
+    assert "own.txt" in out and "secret.txt" not in out
