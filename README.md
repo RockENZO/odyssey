@@ -86,7 +86,7 @@ agent -> verify -> (agent | end)
 ```
 
 - **Approvals.** `bash`, `write` and `edit` pause the run and wait. `/approve` runs the call (`/approve always` stops asking for that tool in this session), `/reject [reason]` refuses it and tells the model why. `--yes` disables the prompts. Read-only tools, memory, tasks and web tools run without asking.
-- **Checkpoints and resume.** After every step the graph state is saved to a SQLite file in the data directory (`checkpoints.sqlite`), with synchronous durability. If the process is killed, `odyssey --engine graph --resume` continues the last thread and `/resume` finishes the interrupted turn. A test kills a real process mid-turn and resumes it.
+- **Checkpoints and resume.** After every step the graph state is saved to a SQLite file in the data directory (`checkpoints.sqlite`), with synchronous durability. If the process is killed, `odyssey --engine graph --resume` continues the last thread started from the same directory (Odyssey keeps one per launch directory and refuses to run a thread from another directory) and `/resume` finishes the interrupted turn. A test kills a real process mid-turn and resumes it.
 - **What resume does not do.** A tool call that was running when the process died has no recorded result and runs again; Odyssey tells you which call it was. Checkpoints save the conversation state, not your files, so a half-applied edit stays applied.
 - **Plan.** `todo_write` now stores a structured plan in the graph state (`/plan` shows it) and the plan is given to the model on every step.
 - **Budgets.** Per turn, at most 25 model calls and 40 tool calls; the run stops with `budget_exhausted` instead of looping.

@@ -351,3 +351,40 @@ def test_a_thread_is_bound_to_the_workspace_it_started_in(tmp_path):
         return await in_a.decide(True)
 
     assert run(go()).status == "done"
+
+
+def test_a_thread_is_bound_to_its_launch_directory_not_only_the_project_root(tmp_path):
+    """A pending relative write must not run against another subdirectory of the same project."""
+    saver = MemorySaver()
+    chat = scripted({"tool_calls": [call("write", path="out.txt", content="1")]}, {"content": "ok"})
+    policy = ApprovalPolicy()
+    graph = build_graph(chat, checkpointer=saver, policy=policy)
+    in_a = GraphSession(graph, "t", policy, workspace="/repo", base="/repo/a")
+    in_b = GraphSession(graph, "t", policy, workspace="/repo", base="/repo/b")
+
+    async def go():
+        await in_a.submit("write")
+        for attempt in (in_b.decide(True), in_b.resume(), in_b.submit("hi")):
+            with pytest.raises(RuntimeError, match="started in /repo/a"):
+                await attempt
+        return await in_a.decide(True)
+
+    assert run(go()).status == "done"
+
+
+def test_an_approval_does_not_carry_over_to_a_later_call_that_reuses_the_id(tmp_path):
+    first = {**call("write", path="a.txt", content="1"), "id": "call_1"}
+    second = {**call("write", path="b.txt", content="2"), "id": "call_1"}
+    chat = scripted({"tool_calls": [first]}, {"tool_calls": [second]}, {"content": "done"})
+
+    async def go():
+        s = make(chat)
+        await s.submit("go")
+        after_first = await s.decide(True)
+        # the second call has the same id but is a different operation: it must ask again
+        assert after_first.status == "awaiting_approval"
+        assert after_first.approval[0]["arguments"]["path"] == "b.txt"
+        assert not (tmp_path / "b.txt").exists()
+        return await s.decide(True)
+
+    assert run(go()).status == "done"

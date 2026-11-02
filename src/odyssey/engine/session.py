@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -34,11 +35,12 @@ def new_thread_id() -> str:
 
 
 class GraphSession:
-    def __init__(self, graph: Any, thread_id: str, policy: ApprovalPolicy, workspace: str = "", **limits: int) -> None:
+    def __init__(self, graph: Any, thread_id: str, policy: ApprovalPolicy, workspace: str = "", base: str = "", **limits: int) -> None:
         self.graph = graph
         self.thread_id = thread_id
         self.policy = policy
         self.workspace = workspace
+        self.base = base
         self.limits = limits
         self._config = {"configurable": {"thread_id": thread_id}}
 
@@ -49,12 +51,19 @@ class GraphSession:
         return self.thread_id
 
     def _check_workspace(self, snapshot) -> None:
-        """Unfinished work belongs to the workspace it was started in; do not run it in another."""
-        recorded = snapshot.values.get("workspace", "")
-        if self.workspace and recorded and recorded != self.workspace:
+        """Unfinished work belongs to the directory it was started in; do not run it in another.
+
+        The project root alone is not enough: a relative path in a pending call means a different
+        file when Odyssey is launched from another subdirectory of the same repository.
+        """
+        recorded_root = snapshot.values.get("workspace", "")
+        recorded_base = snapshot.values.get("base", "")
+        moved_root = self.workspace and recorded_root and recorded_root != self.workspace
+        moved_base = self.base and recorded_base and recorded_base != self.base
+        if moved_root or moved_base:
             raise RuntimeError(
-                f"this thread was started in {recorded}, but Odyssey is running in {self.workspace}; "
-                "start Odyssey from the original directory or begin a new thread with /clear"
+                f"this thread was started in {recorded_base or recorded_root}, but Odyssey is running in "
+                f"{self.base or self.workspace}; start Odyssey from the original directory or begin a new thread with /clear"
             )
 
     async def _snapshot(self):
@@ -88,7 +97,7 @@ class GraphSession:
             raise RuntimeError("a tool call is waiting for approval: approve or reject it first")
         if snapshot.next:
             raise RuntimeError("the previous turn did not finish: resume it first")
-        await self.graph.ainvoke(new_turn(text, workspace=self.workspace, **self.limits), self._config, durability="sync")
+        await self.graph.ainvoke(new_turn(text, workspace=self.workspace, base=self.base, **self.limits), self._config, durability="sync")
         return self._result(await self._snapshot())
 
     async def decide(self, approve: bool, reason: str = "", always: bool = False) -> TurnResult:
@@ -128,5 +137,28 @@ def default_db_path() -> Path:
 
 
 def last_thread_file() -> Path:
+    """JSON map from launch directory to the last thread started there."""
     from odyssey.config import get_data_dir
-    return get_data_dir() / "last_thread.txt"
+    return get_data_dir() / "last_threads.json"
+
+
+def recall_thread(base: str) -> str:
+    """The last thread started from ``base`` ('' if there is none)."""
+    try:
+        return str(json.loads(last_thread_file().read_text()).get(base, ""))
+    except (OSError, ValueError, AttributeError):
+        return ""
+
+
+def remember_thread(base: str, thread_id: str) -> None:
+    """Record ``thread_id`` as the last thread of ``base``; other directories' threads are kept."""
+    path = last_thread_file()
+    try:
+        threads = json.loads(path.read_text())
+        if not isinstance(threads, dict):
+            threads = {}
+    except (OSError, ValueError):
+        threads = {}
+    threads[base] = thread_id
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(threads, indent=2))

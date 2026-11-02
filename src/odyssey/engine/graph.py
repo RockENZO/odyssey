@@ -40,7 +40,7 @@ MAX_LOGGED_RESULT_CHARS = 20000
 class AgentState(TypedDict, total=False):
     messages: Annotated[list[dict[str, Any]], operator.add]
     tool_log: Annotated[list[dict[str, Any]], operator.add]
-    approved: Annotated[list[str], operator.add]
+    approved: list[str]  # ids approved for the CURRENT batch of calls; replaced with every new batch
     todos: list[dict[str, str]]
     pending: list[dict[str, Any]]
     model_calls: int
@@ -53,12 +53,15 @@ class AgentState(TypedDict, total=False):
     final: str
     verification: dict[str, Any]
     workspace: str  # project root the thread was started in; resume refuses a different one
+    base: str  # directory Odyssey was launched from: relative tool paths resolve against it
 
 
-def new_turn(user_input: str, *, max_model_calls: int = 25, max_tool_calls: int = 40, max_repairs: int = 2, workspace: str = "") -> dict[str, Any]:
+def new_turn(user_input: str, *, max_model_calls: int = 25, max_tool_calls: int = 40, max_repairs: int = 2, workspace: str = "", base: str = "") -> dict[str, Any]:
     """The state update that starts a new user turn on an existing or new thread."""
     return {
         "workspace": workspace,
+        "base": base,
+        "approved": [],
         "messages": [{"role": "user", "content": user_input}],
         "pending": [],
         "model_calls": 0,
@@ -103,6 +106,8 @@ def build_graph(
             update.update(
                 messages=[{"role": "assistant", "content": "", "tool_calls": [c.to_message() for c in calls]}],
                 pending=[{"id": c.id, "name": c.name, "arguments": c.arguments} for c in calls],
+                # An approval covers one batch. A later response may reuse an id for a different call.
+                approved=[],
             )
         return update
 
@@ -120,7 +125,7 @@ def build_graph(
             return {}
         decision = interrupt({"type": "approval", "calls": needs})
         if decision.get("approve"):
-            return {"approved": [c["id"] for c in needs]}
+            return {"approved": sorted(already | {c["id"] for c in needs})}
         reason = decision.get("reason") or "no reason given"
         rejected = {c["id"] for c in needs}
         messages, log = [], []

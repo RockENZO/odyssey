@@ -33,3 +33,20 @@ def test_project_root_recognises_git_worktrees_and_submodules(tmp_path):
     plain = tmp_path / "plain"
     (plain / ".git").mkdir(parents=True)
     assert _find_project_root(str(plain)) == str(plain)
+
+
+def test_root_options_reach_the_repl_subcommand(monkeypatch):
+    from typer.testing import CliRunner
+
+    from odyssey.cli import app as app_module
+
+    seen = []
+    monkeypatch.setattr(app_module, "_launch_repl", lambda engine="loop", resume=False, yes=False: seen.append((engine, resume, yes)))
+    runner = CliRunner()
+    for args in (["--engine", "graph", "--resume", "repl"], ["repl", "--engine", "graph", "--resume"],
+                 ["--engine", "graph", "repl", "--resume", "--yes"], ["--engine", "graph", "--resume"]):
+        assert runner.invoke(app_module.app, args).exit_code == 0
+    assert seen == [("graph", True, False), ("graph", True, False), ("graph", True, True), ("graph", True, False)]
+    seen.clear()
+    assert runner.invoke(app_module.app, ["repl"]).exit_code == 0
+    assert seen == [("loop", False, False)]

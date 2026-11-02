@@ -9,7 +9,7 @@ from odyssey.core import workspace
 from odyssey.core.state import Conversation
 from odyssey.engine.graph import build_graph
 from odyssey.engine.policy import ApprovalPolicy
-from odyssey.engine.session import GraphSession, TurnResult, last_thread_file
+from odyssey.engine.session import GraphSession, TurnResult, recall_thread
 from odyssey.tools.registry import init_tools
 
 
@@ -80,8 +80,6 @@ def test_graph_commands_report_misuse_instead_of_crashing(capsys):
 
 
 def test_start_session_remembers_and_reuses_the_thread(tmp_path):
-    from odyssey.engine.session import last_thread_file
-
     async def go():
         first = await repl._start_graph_session(MemorySaver(), resume=False, approve_all=False)
         again = await repl._start_graph_session(MemorySaver(), resume=True, approve_all=False)
@@ -91,7 +89,7 @@ def test_start_session_remembers_and_reuses_the_thread(tmp_path):
     first, again, fresh, approve_all = asyncio.run(go())
     assert again == first
     assert fresh != first and approve_all is True
-    assert last_thread_file().read_text() == fresh
+    assert recall_thread("") == fresh
 
 
 def test_clear_history_and_save_follow_the_graph_thread(tmp_path, capsys):
@@ -111,7 +109,7 @@ def test_clear_history_and_save_follow_the_graph_thread(tmp_path, capsys):
 
     messages = asyncio.run(go())
     assert [m["content"] for m in messages] == ["again", "second answer"]
-    assert last_thread_file().read_text() == gs.thread_id
+    assert recall_thread("") == gs.thread_id
 
 
 def test_the_double_run_warning_is_shown_even_when_an_approval_follows(capsys):
@@ -125,17 +123,31 @@ def test_the_double_run_warning_is_shown_even_when_an_approval_follows(capsys):
     assert out.index("may already have run") < out.index("Waiting for approval")
 
 
-def test_resume_from_another_workspace_starts_a_new_thread(tmp_path, capsys):
+def test_resume_from_another_directory_does_not_overwrite_the_original_thread(tmp_path, capsys):
     async def go():
         saver = MemorySaver()
         a = await repl._start_graph_session(saver, resume=False, approve_all=False, workspace="/project/a")
-        # put something in the thread so it records its workspace
-        await a.graph.aupdate_state(a._config, {"workspace": "/project/a", "messages": [], "pending": []}, as_node="verify")
-        same = await repl._start_graph_session(saver, resume=True, approve_all=False, workspace="/project/a")
+        # put something in the thread so it records where it started
+        await a.graph.aupdate_state(a._config, {"workspace": "/project/a", "base": "/project/a", "messages": [], "pending": []}, as_node="verify")
         other = await repl._start_graph_session(saver, resume=True, approve_all=False, workspace="/project/b")
-        return a.thread_id, same.thread_id, other.thread_id
+        back = await repl._start_graph_session(saver, resume=True, approve_all=False, workspace="/project/a")
+        return a.thread_id, other.thread_id, back.thread_id
 
-    first, same, other = asyncio.run(go())
-    assert same == first
+    first, other, back = asyncio.run(go())
     assert other != first
-    assert "not here" in capsys.readouterr().out
+    assert back == first, "starting in project b must not make project a's thread unreachable"
+    assert recall_thread("/project/a") == first and recall_thread("/project/b") == other
+    assert "No earlier thread" in capsys.readouterr().out
+
+
+def test_resume_from_another_subdirectory_of_the_same_project_is_a_different_thread(tmp_path):
+    async def go():
+        saver = MemorySaver()
+        a = await repl._start_graph_session(saver, resume=False, approve_all=False, workspace="/repo", base="/repo/a")
+        await a.graph.aupdate_state(a._config, {"workspace": "/repo", "base": "/repo/a", "messages": [], "pending": []}, as_node="verify")
+        b = await repl._start_graph_session(saver, resume=True, approve_all=False, workspace="/repo", base="/repo/b")
+        again = await repl._start_graph_session(saver, resume=True, approve_all=False, workspace="/repo", base="/repo/a")
+        return a.thread_id, b.thread_id, again.thread_id
+
+    a, b, again = asyncio.run(go())
+    assert b != a and again == a

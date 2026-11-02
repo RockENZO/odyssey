@@ -71,32 +71,37 @@ async def run_repl(cwd: str, engine: str = "loop", resume: bool = False, approve
     if engine == "graph":
         from odyssey.engine.session import default_db_path, open_checkpointer
         async with open_checkpointer(default_db_path()) as saver:
-            gs = await _start_graph_session(saver, resume, approve_all, project_root)
+            gs = await _start_graph_session(saver, resume, approve_all, project_root, cwd)
             await _sync_conv(conv, gs)
             await _repl_loop(conv, gs)
     else:
         await _repl_loop(conv, None)
 
 
-async def _start_graph_session(saver, resume: bool, approve_all: bool, workspace: str = ""):
+async def _start_graph_session(saver, resume: bool, approve_all: bool, workspace: str = "", base: str = ""):
     from odyssey.engine.graph import build_graph
     from odyssey.engine.policy import ApprovalPolicy
-    from odyssey.engine.session import GraphSession, last_thread_file, new_thread_id
+    from odyssey.engine.session import GraphSession, new_thread_id, recall_thread, remember_thread
     from odyssey.llm.client import chat_completion
 
+    base = base or workspace
     thread_id = new_thread_id()
     policy = ApprovalPolicy(approve_all=approve_all)
     graph = build_graph(chat_completion, checkpointer=saver, policy=policy)
-    if resume and last_thread_file().exists():
-        previous = last_thread_file().read_text().strip()
-        recorded = (await graph.aget_state({"configurable": {"thread_id": previous}})).values.get("workspace", "") if previous else ""
-        if previous and recorded and recorded != workspace:
-            console.print(f"[yellow]The last thread was started in {recorded}, not here. Starting a new thread; "
-                          "run Odyssey from that directory to continue the old one.[/yellow]")
-        elif previous:
-            thread_id = previous
-    last_thread_file().write_text(thread_id)
-    gs = GraphSession(graph, thread_id, policy, workspace=workspace)
+    if resume:
+        # The pointer is per launch directory, so starting here never overwrites the thread of another project.
+        previous = recall_thread(base)
+        if previous:
+            values = (await graph.aget_state({"configurable": {"thread_id": previous}})).values
+            recorded = values.get("base") or values.get("workspace", "")
+            if recorded and recorded != base:
+                console.print(f"[yellow]The last thread here was started in {recorded}, not {base}. Starting a new thread.[/yellow]")
+            else:
+                thread_id = previous
+        else:
+            console.print("[dim]No earlier thread was started from this directory; starting a new one.[/dim]")
+    remember_thread(base, thread_id)
+    gs = GraphSession(graph, thread_id, policy, workspace=workspace, base=base)
     console.print(f"[dim]Graph engine | thread {thread_id} | approval needed for: "
                   f"{'nothing (--yes)' if approve_all else ', '.join(sorted(policy.ask_tools))}[/dim]")
     snapshot = await gs.state()
@@ -141,8 +146,8 @@ async def _handle_graph_slash(cmd: str, gs, conv: Conversation) -> bool:
     try:
         if command == "/clear":
             gs.new_thread()
-            from odyssey.engine.session import last_thread_file
-            last_thread_file().write_text(gs.thread_id)
+            from odyssey.engine.session import remember_thread
+            remember_thread(gs.base or gs.workspace, gs.thread_id)
             conv.messages.clear()
             console.print(f"[dim]Conversation cleared. New thread {gs.thread_id}.[/dim]")
             return True

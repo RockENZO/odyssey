@@ -29,6 +29,8 @@ def main(
     if version:
         console.print(f"Odyssey v{__version__}")
         raise typer.Exit()
+    # Options given before the subcommand (`odyssey --engine graph repl`) must reach it.
+    ctx.obj = {"engine": engine, "resume": resume, "yes": yes}
     if ctx.invoked_subcommand is not None:
         return
     _launch_repl(engine, resume, yes)
@@ -36,11 +38,13 @@ def main(
 
 @app.command()
 def repl(
-    engine: str = typer.Option("loop", "--engine", help="'loop' or 'graph'"),
+    ctx: typer.Context,
+    engine: str | None = typer.Option(None, "--engine", help="'loop' or 'graph'"),
     resume: bool = typer.Option(False, "--resume"),
     yes: bool = typer.Option(False, "--yes"),
 ):
-    _launch_repl(engine, resume, yes)
+    root = ctx.obj or {}
+    _launch_repl(engine or root.get("engine", "loop"), resume or root.get("resume", False), yes or root.get("yes", False))
 
 
 @app.command()
