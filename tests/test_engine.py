@@ -388,3 +388,30 @@ def test_an_approval_does_not_carry_over_to_a_later_call_that_reuses_the_id(tmp_
         return await s.decide(True)
 
     assert run(go()).status == "done"
+
+
+def _sub_agent_writes(monkeypatch):
+    """The model inside the `task` sub-agent tries to write a file, then answers."""
+    from odyssey.core import tool_loop
+
+    replies = [{"tool_calls": [call("write", path="sub.txt", content="x")]}, {"content": "sub done"}]
+
+    async def sub_chat(messages):
+        return {"message": replies.pop(0)}
+
+    monkeypatch.setattr(tool_loop, "chat_completion", sub_chat)
+
+
+def test_a_sub_agent_cannot_run_a_tool_that_needs_approval(tmp_path, monkeypatch):
+    _sub_agent_writes(monkeypatch)
+    chat = scripted({"tool_calls": [call("task", description="write sub.txt")]}, {"content": "finished"})
+    result = run(make(chat).submit("delegate"))
+    assert result.status == "done"
+    assert not (tmp_path / "sub.txt").exists(), "the sub-agent wrote a file without approval"
+
+
+def test_a_sub_agent_may_use_a_tool_the_user_allowed(tmp_path, monkeypatch):
+    _sub_agent_writes(monkeypatch)
+    chat = scripted({"tool_calls": [call("task", description="write sub.txt")]}, {"content": "finished"})
+    run(make(chat, policy=ApprovalPolicy(approve_all=True)).submit("delegate"))
+    assert (tmp_path / "sub.txt").read_text() == "x"

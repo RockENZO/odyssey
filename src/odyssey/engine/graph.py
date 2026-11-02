@@ -25,7 +25,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
 
 from odyssey.core.tool_calls import parse_tool_calls
-from odyssey.core.tool_loop import MAX_TOOL_RESULT_CHARS, SYSTEM_PROMPT
+from odyssey.core.tool_loop import MAX_TOOL_RESULT_CHARS, SYSTEM_PROMPT, blocked_tool
 from odyssey.engine.policy import ApprovalPolicy
 from odyssey.engine.todos import format_todos, parse_todos
 from odyssey.tools.registry import get_tool
@@ -167,7 +167,13 @@ def build_graph(
         elif (tool := get_tool(call["name"])) is None:
             result, ok = f"Error: tool '{call['name']}' not found", False
         else:
-            outcome = await tool.execute(**call["arguments"])
+            # A tool that runs its own model/tool loop (``task``) cannot pause for approval, so
+            # inside it the tools the policy asks about are refused instead of run unasked.
+            token = blocked_tool.set(lambda name: policy.needs_approval({"name": name}))
+            try:
+                outcome = await tool.execute(**call["arguments"])
+            finally:
+                blocked_tool.reset(token)
             result, ok = outcome.text, outcome.ok
         update.update(
             messages=[{"role": "tool", "content": result[:MAX_TOOL_RESULT_CHARS], "tool_name": call["name"], "tool_call_id": call["id"]}],

@@ -91,7 +91,8 @@ agent -> verify -> (agent | end)
 - **Plan.** `todo_write` now stores a structured plan in the graph state (`/plan` shows it) and the plan is given to the model on every step.
 - **Budgets.** Per turn, at most 25 model calls and 40 tool calls; the run stops with `budget_exhausted` instead of looping.
 - **Acceptance hook.** `build_graph(..., acceptance=...)` takes an async check that runs when the model answers without a tool call. A failure is sent back to the model for up to two repair rounds; the turn ends `verified`, `unverified` or `done` (no check configured). The CLI does not configure a check yet.
-- **Not covered.** Sub-agents (`task`) still use the old loop inside the graph's `tools` step. The wall-clock time budget is not implemented. Not yet tried against a live Ollama model.
+- **Sub-agents under approval.** A `task` sub-agent runs inside one graph step and cannot pause to ask, so tools that need approval (`bash`, `write`, `edit`) are refused there and the sub-agent is told to hand the step back. With `--yes`, or after `/approve always` for a tool, the sub-agent may use it.
+- **Not covered.** Sub-agents (`task`) still use the old loop inside the graph's `tools` step, not their own subgraph. The wall-clock time budget is not implemented. Not yet tried against a live Ollama model.
 
 ## Quick Start
 
