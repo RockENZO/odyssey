@@ -13,16 +13,26 @@ from pathlib import Path
 ALLOW_OUTSIDE_ENV = "ODYSSEY_ALLOW_OUTSIDE_WORKSPACE"
 
 _root: Path | None = None
+_base: Path | None = None
 
 
 class WorkspaceError(Exception):
     """A tool tried to reach a path outside the workspace root."""
 
 
-def set_workspace_root(path: str | os.PathLike[str] | None) -> None:
-    """Confine path-taking tools to ``path``. ``None`` removes the restriction."""
-    global _root
+def set_workspace_root(
+    path: str | os.PathLike[str] | None,
+    base: str | os.PathLike[str] | None = None,
+) -> None:
+    """Confine path-taking tools to ``path``. ``None`` removes the restriction.
+
+    ``base`` is the directory relative paths resolve against; it defaults to ``path``. The REPL
+    passes the launch directory, so a relative path means the same file to the file tools as to
+    ``bash``, which starts there too. The boundary is checked on the resolved path either way.
+    """
+    global _root, _base
     _root = Path(path).expanduser().resolve() if path is not None else None
+    _base = Path(base).expanduser().resolve() if base is not None else None
 
 
 def get_workspace_root() -> Path | None:
@@ -32,14 +42,14 @@ def get_workspace_root() -> Path | None:
 def resolve_path(path: str) -> str:
     """Return the absolute path for ``path``, or raise if it escapes the workspace.
 
-    Relative paths resolve against the workspace root when one is set, otherwise against
-    the process working directory. Symlinks are resolved before the check, so a link that
+    Relative paths resolve against the base directory (the root unless one was given), or
+    the process working directory when no root is set. Symlinks are resolved before the check, so a link that
     points outside the root is rejected.
     """
     expanded = Path(os.path.expanduser(path))
     if _root is None:
         return os.path.abspath(expanded)
-    candidate = expanded if expanded.is_absolute() else _root / expanded
+    candidate = expanded if expanded.is_absolute() else (_base or _root) / expanded
     resolved = Path(os.path.realpath(candidate))
     if resolved != _root and _root not in resolved.parents:
         raise WorkspaceError(

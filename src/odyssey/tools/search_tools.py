@@ -9,7 +9,7 @@ async def glob(pattern: str, path: str | None = None) -> str:
     try:
         import glob as glob_mod
         root = get_workspace_root()
-        search_path = resolve_path(path or str(root or "."))
+        search_path = resolve_path(path or ".")
         full_pattern = os.path.join(search_path, pattern)
         matches = glob_mod.glob(full_pattern, recursive=True)
         if not matches:
@@ -33,7 +33,7 @@ async def glob(pattern: str, path: str | None = None) -> str:
 async def grep(pattern: str, path: str | None = None, include: str | None = None) -> str:
     try:
         root = get_workspace_root()
-        search_path = resolve_path(path or str(root or os.getcwd()))
+        search_path = resolve_path(path or ".")
         cmd = ["rg", "-n", "--no-heading", pattern, search_path]
         if include:
             cmd.extend(["--type", include] if include == "py" or include == "js" else ["--glob", f"*.{include}"])

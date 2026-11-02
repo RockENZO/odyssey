@@ -49,7 +49,7 @@ async def run_repl(cwd: str) -> None:
     if os.environ.get(ALLOW_OUTSIDE_ENV) == "1":
         set_workspace_root(None)
     else:
-        set_workspace_root(project_root)
+        set_workspace_root(project_root, base=cwd)
     from odyssey.tools import bash as bash_tool
     bash_tool._working_dir = cwd
     history_file = get_config_dir() / "history.txt"

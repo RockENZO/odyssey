@@ -76,3 +76,21 @@ def test_glob_and_grep_do_not_leave_the_root(tmp_path):
     assert "out.py" not in run(search_tools.glob("../*.py"))
     assert "outside the workspace" in run(search_tools.glob("*.py", path=str(tmp_path)))
     assert "outside the workspace" in run(search_tools.grep("needle", path=str(tmp_path)))
+
+
+def test_relative_paths_use_the_launch_directory_like_bash(tmp_path):
+    """Launched from repo/service, `config.txt` must be the same file for the file tools and for bash."""
+    root = tmp_path / "repo"
+    launch = root / "service"
+    launch.mkdir(parents=True)
+    (launch / "config.txt").write_text("service config")
+    (root / "config.txt").write_text("root config")
+    workspace.set_workspace_root(root, base=launch)
+    assert "service config" in run(file_ops.read_file("config.txt"))
+    assert "Written" in run(file_ops.write_file("new.txt", "x"))
+    assert (launch / "new.txt").exists() and not (root / "new.txt").exists()
+    found = run(search_tools.glob("*.txt"))
+    assert str(launch / "config.txt") in found and str(root / "config.txt") not in found
+    # the boundary is still the repository root
+    assert "outside the workspace" in run(file_ops.read_file("../../escape.txt"))
+    assert "root config" in run(file_ops.read_file("../config.txt"))
