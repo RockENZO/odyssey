@@ -1162,6 +1162,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+eval = [
+    { name = "trajectory-replay" },
+]
 verify = [
     { name = "transactional-agent-ledger" },
 ]
@@ -1183,10 +1186,11 @@ requires-dist = [
     { name = "prompt-toolkit", specifier = ">=3.0.52" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "rich", specifier = ">=13.0.0" },
+    { name = "trajectory-replay", marker = "extra == 'eval'", git = "https://github.com/RockENZO/trajectory-replay?rev=00d6c1e" },
     { name = "transactional-agent-ledger", marker = "extra == 'verify'", git = "https://github.com/RockENZO/transactional-agent-ledger?rev=bf89fab" },
     { name = "typer", specifier = ">=0.15.0" },
 ]
-provides-extras = ["verify"]
+provides-extras = ["verify", "eval"]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=9.0.3" }]
@@ -2075,6 +2079,11 @@ sdist = { url = "https://files.pythonhosted.org/packages/09/a9/6ba95a270c6f1fbcd
 wheels = [
     { url = "https://files.pythonhosted.org/packages/16/e1/3079a9ff9b8e11b846c6ac5c8b5bfb7ff225eee721825310c91b3b50304f/tqdm-4.67.3-py3-none-any.whl", hash = "sha256:ee1e4c0e59148062281c49d80b25b67771a127c85fc9676d3be5f243206826bf", size = 78374, upload-time = "2026-02-03T17:35:50.982Z" },
 ]
+
+[[package]]
+name = "trajectory-replay"
+version = "0.1.0"
+source = { git = "https://github.com/RockENZO/trajectory-replay?rev=00d6c1e#00d6c1e24ba4bad1fc07635ecee8bde3aca0044a" }
 
 [[package]]
 name = "transactional-agent-ledger"

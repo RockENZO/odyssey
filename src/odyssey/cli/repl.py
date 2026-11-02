@@ -44,6 +44,7 @@ Graph engine only (`odyssey --engine graph`):
   /resume             Continue a turn that was interrupted
   /plan               Show the structured plan (todo_write)
   /thread             Show this session's thread id
+  /cassette [path]    Save this thread's tool calls as a trajectory-replay cassette (needs odyssey[eval])
 
 Prefix a command with `!` to run it directly in the shell without AI interpretation.
 """
@@ -155,7 +156,7 @@ async def _handle_graph_slash(cmd: str, gs, conv: Conversation) -> bool:
     """Handle the graph-only commands. Returns True when the command was one of them."""
     parts = cmd.split(maxsplit=1)
     command, arg = parts[0].lower(), (parts[1] if len(parts) > 1 else "")
-    if command not in ("/approve", "/reject", "/resume", "/plan", "/thread", "/clear"):
+    if command not in ("/approve", "/reject", "/resume", "/plan", "/thread", "/clear", "/cassette"):
         return False
     try:
         if command == "/clear":
@@ -171,6 +172,12 @@ async def _handle_graph_slash(cmd: str, gs, conv: Conversation) -> bool:
             _show_turn(await gs.decide(False, reason=arg.strip()))
         elif command == "/resume":
             _show_turn(await gs.resume())
+        elif command == "/cassette":
+            from odyssey.config import get_data_dir
+            from odyssey.engine.cassette import save_cassette
+            target = Path(arg.strip()).expanduser() if arg.strip() else get_data_dir() / "cassettes" / f"{gs.thread_id}.json"
+            count = save_cassette(await gs.state(), target)
+            console.print(f"[dim]Saved {count} tool calls to {target}[/dim]")
         elif command == "/plan":
             from odyssey.engine.todos import format_todos
             console.print(format_todos((await gs.state()).get("todos", [])))
