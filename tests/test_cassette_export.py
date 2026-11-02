@@ -167,3 +167,21 @@ def test_export_without_the_package_says_how_to_install_it(monkeypatch):
     monkeypatch.setattr(builtins, "__import__", fake)
     with pytest.raises(RuntimeError, match=r"odyssey\[eval\]"):
         calls_from_state({"tool_log": []})
+
+
+def test_cassette_command_reports_a_bad_path_and_keeps_the_session(tmp_path, capsys):
+    from odyssey.core.state import Conversation
+
+    s = session(scripted(*SCRIPT))
+    blocker = tmp_path.parent / "a-file"
+    blocker.write_text("not a directory")
+
+    async def go():
+        await s.submit("go")
+        # a regular file is an ancestor of the target, and the target is a directory
+        first = await repl._handle_graph_slash(f"/cassette {blocker}/c.json", s, Conversation())
+        second = await repl._handle_graph_slash(f"/cassette {tmp_path}", s, Conversation())
+        return first, second
+
+    assert run(go()) == (True, True)
+    assert capsys.readouterr().out.count("Errno") == 2

@@ -183,7 +183,7 @@ async def _handle_graph_slash(cmd: str, gs, conv: Conversation) -> bool:
             console.print(format_todos((await gs.state()).get("todos", [])))
         else:
             console.print(f"[dim]Thread {gs.thread_id}. Restart with `odyssey --engine graph --resume` to continue it.[/dim]")
-    except RuntimeError as e:
+    except (RuntimeError, OSError) as e:  # OSError: an unwritable /cassette path must not end the session
         console.print(f"[red]{e}[/red]")
     await _sync_conv(conv, gs)
     return True
