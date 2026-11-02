@@ -415,3 +415,19 @@ def test_a_sub_agent_may_use_a_tool_the_user_allowed(tmp_path, monkeypatch):
     chat = scripted({"tool_calls": [call("task", description="write sub.txt")]}, {"content": "finished"})
     run(make(chat, policy=ApprovalPolicy(approve_all=True)).submit("delegate"))
     assert (tmp_path / "sub.txt").read_text() == "x"
+
+
+def test_a_saved_rejection_is_honoured_after_the_approval_policy_changes(tmp_path):
+    """Restarting with --yes must not turn a rejection of the saved question into an approval."""
+    saver = MemorySaver()
+    first = make(scripted({"tool_calls": [call("write", path="a.txt", content="1")]}), checkpointer=saver)
+    restarted = make(scripted({"content": "ok, skipped"}), checkpointer=saver, policy=ApprovalPolicy(approve_all=True))
+
+    async def go():
+        assert (await first.submit("write")).status == "awaiting_approval"
+        assert (await restarted.pending_approval())[0]["name"] == "write"
+        return await restarted.decide(False, reason="no")
+
+    assert run(go()).status == "done"
+    assert not (tmp_path / "a.txt").exists(), "the rejected write ran after the policy changed"
+

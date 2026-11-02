@@ -1,10 +1,13 @@
 """The agent as a LangGraph state machine.
 
-    START -> agent -> approve -> tools -> (tools | agent)
+    START -> agent -> gate -> approve -> tools -> (tools | agent)
     agent -> verify -> (agent | END)      (when the model answered without calling a tool)
 
 * ``agent`` asks the model for its next move.
-* ``approve`` pauses with ``interrupt`` when a pending tool call needs a person's approval.
+* ``gate`` decides which pending calls need approval under the current policy and records them in
+  the state (``awaiting``). Doing this in its own step means the question that was asked is saved
+  with the checkpoint: a resumed thread answers that question, even if the policy has changed since.
+* ``approve`` pauses with ``interrupt`` on the saved ``awaiting`` calls.
 * ``tools`` runs ONE pending call per step, so the checkpointer records progress after every call.
 * ``verify`` runs an optional acceptance check on the model's final answer and sends a failure
   reason back to the model for a bounded number of repair rounds.
@@ -40,6 +43,7 @@ MAX_LOGGED_RESULT_CHARS = 20000
 class AgentState(TypedDict, total=False):
     messages: Annotated[list[dict[str, Any]], operator.add]
     tool_log: Annotated[list[dict[str, Any]], operator.add]
+    awaiting: list[dict[str, Any]]  # calls the person was asked about; fixed when the question is asked
     approved: list[str]  # ids approved for the CURRENT batch of calls; replaced with every new batch
     todos: list[dict[str, str]]
     pending: list[dict[str, Any]]
@@ -114,18 +118,25 @@ def build_graph(
     def after_agent(state: AgentState) -> str:
         if state.get("status") == "budget_exhausted":
             return END
-        return "approve" if state.get("pending") else "verify"
+        return "gate" if state.get("pending") else "verify"
+
+    async def gate(state: AgentState) -> dict[str, Any]:
+        already = set(state.get("approved", []))
+        needs = [c for c in state.get("pending", []) if c["id"] not in already and policy.needs_approval(c)]
+        return {"awaiting": needs}
+
+    def after_gate(state: AgentState) -> str:
+        return "approve" if state.get("awaiting") else "tools"
 
     async def approve(state: AgentState) -> dict[str, Any]:
         # LangGraph re-runs this node from the top when the interrupt is resumed, so everything
-        # before ``interrupt`` must be free of side effects.
+        # before ``interrupt`` must be free of side effects. ``awaiting`` comes from the checkpoint,
+        # not from the policy, so a changed policy cannot make this node skip a saved question.
+        needs = state.get("awaiting", [])
         already = set(state.get("approved", []))
-        needs = [c for c in state.get("pending", []) if c["id"] not in already and policy.needs_approval(c)]
-        if not needs:
-            return {}
         decision = interrupt({"type": "approval", "calls": needs})
         if decision.get("approve"):
-            return {"approved": sorted(already | {c["id"] for c in needs})}
+            return {"approved": sorted(already | {c["id"] for c in needs}), "awaiting": []}
         reason = decision.get("reason") or "no reason given"
         rejected = {c["id"] for c in needs}
         messages, log = [], []
@@ -136,6 +147,7 @@ def build_graph(
         return {
             "messages": messages,
             "tool_log": log,
+            "awaiting": [],
             # Other calls of the same batch still run; the rejected ones are dropped.
             "pending": [c for c in state["pending"] if c["id"] not in rejected],
         }
@@ -213,11 +225,13 @@ def build_graph(
 
     graph = StateGraph(AgentState)
     graph.add_node("agent", agent)
+    graph.add_node("gate", gate)
     graph.add_node("approve", approve)
     graph.add_node("tools", tools)
     graph.add_node("verify", verify)
     graph.add_edge(START, "agent")
-    graph.add_conditional_edges("agent", after_agent, {"approve": "approve", "verify": "verify", END: END})
+    graph.add_conditional_edges("agent", after_agent, {"gate": "gate", "verify": "verify", END: END})
+    graph.add_conditional_edges("gate", after_gate, {"approve": "approve", "tools": "tools"})
     graph.add_conditional_edges("approve", after_approve, {"tools": "tools", "agent": "agent"})
     graph.add_conditional_edges("tools", after_tools, {"tools": "tools", "agent": "agent", END: END})
     graph.add_conditional_edges("verify", after_verify, {"agent": "agent", END: END})
