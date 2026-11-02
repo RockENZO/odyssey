@@ -21,6 +21,7 @@ class TurnResult:
     text: str = ""
     approval: list[dict[str, Any]] = field(default_factory=list)  # calls waiting for a decision
     resumed_in_flight: list[dict[str, Any]] = field(default_factory=list)  # calls that may have run before a crash
+    verification: dict[str, Any] = field(default_factory=dict)  # {ok, reason} of the completion check, if one ran
 
 
 @contextlib.asynccontextmanager
@@ -88,7 +89,7 @@ class GraphSession:
         if approval:
             return TurnResult("awaiting_approval", approval=approval)
         values = snapshot.values
-        return TurnResult(values.get("status", "idle"), text=values.get("final", ""))
+        return TurnResult(values.get("status", "idle"), text=values.get("final", ""), verification=dict(values.get("verification") or {}))
 
     async def submit(self, text: str) -> TurnResult:
         snapshot = await self._snapshot()

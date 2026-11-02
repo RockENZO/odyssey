@@ -41,7 +41,7 @@ def test_root_options_reach_the_repl_subcommand(monkeypatch):
     from odyssey.cli import app as app_module
 
     seen = []
-    monkeypatch.setattr(app_module, "_launch_repl", lambda engine="loop", resume=False, yes=False: seen.append((engine, resume, yes)))
+    monkeypatch.setattr(app_module, "_launch_repl", lambda engine="loop", resume=False, yes=False, verify="": seen.append((engine, resume, yes)))
     runner = CliRunner()
     for args in (["--engine", "graph", "--resume", "repl"], ["repl", "--engine", "graph", "--resume"],
                  ["--engine", "graph", "repl", "--resume", "--yes"], ["--engine", "graph", "--resume"]):

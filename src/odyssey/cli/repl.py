@@ -49,7 +49,7 @@ Prefix a command with `!` to run it directly in the shell without AI interpretat
 """
 
 
-async def run_repl(cwd: str, engine: str = "loop", resume: bool = False, approve_all: bool = False) -> None:
+async def run_repl(cwd: str, engine: str = "loop", resume: bool = False, approve_all: bool = False, verify: str = "") -> None:
     init_tools()
     project_root = _find_project_root(cwd)
     conv = Conversation(working_dir=cwd, project_root=project_root)
@@ -71,14 +71,14 @@ async def run_repl(cwd: str, engine: str = "loop", resume: bool = False, approve
     if engine == "graph":
         from odyssey.engine.session import default_db_path, open_checkpointer
         async with open_checkpointer(default_db_path()) as saver:
-            gs = await _start_graph_session(saver, resume, approve_all, project_root, cwd)
+            gs = await _start_graph_session(saver, resume, approve_all, project_root, cwd, verify)
             await _sync_conv(conv, gs)
             await _repl_loop(conv, gs)
     else:
         await _repl_loop(conv, None)
 
 
-async def _start_graph_session(saver, resume: bool, approve_all: bool, workspace: str = "", base: str = ""):
+async def _start_graph_session(saver, resume: bool, approve_all: bool, workspace: str = "", base: str = "", verify: str = ""):
     from odyssey.engine.graph import build_graph
     from odyssey.engine.policy import ApprovalPolicy
     from odyssey.engine.session import GraphSession, new_thread_id, recall_thread, remember_thread
@@ -87,7 +87,14 @@ async def _start_graph_session(saver, resume: bool, approve_all: bool, workspace
     base = base or workspace
     thread_id = new_thread_id()
     policy = ApprovalPolicy(approve_all=approve_all)
-    graph = build_graph(chat_completion, checkpointer=saver, policy=policy)
+    acceptance = None
+    if verify:
+        import shlex
+
+        from odyssey.engine.session import default_db_path
+        from odyssey.engine.verify import ledger_gate
+        acceptance = ledger_gate(shlex.split(verify), ledger_path=default_db_path().with_name("ledger.sqlite"))
+    graph = build_graph(chat_completion, checkpointer=saver, policy=policy, acceptance=acceptance)
     if resume:
         # The pointer is per launch directory, so starting here never overwrites the thread of another project.
         previous = recall_thread(base)
@@ -104,6 +111,8 @@ async def _start_graph_session(saver, resume: bool, approve_all: bool, workspace
     gs = GraphSession(graph, thread_id, policy, workspace=workspace, base=base)
     console.print(f"[dim]Graph engine | thread {thread_id} | approval needed for: "
                   f"{'nothing (--yes)' if approve_all else ', '.join(sorted(policy.ask_tools))}[/dim]")
+    if verify:
+        console.print(f"[dim]Completion check: {verify} (recorded in the ledger)[/dim]")
     snapshot = await gs.state()
     if resume and snapshot:
         pending = await gs.pending_approval()
@@ -132,7 +141,12 @@ def _show_turn(result) -> None:
         return
     console.print()
     console.print(Markdown(result.text or "(no answer)"))
-    if result.status in ("unverified", "budget_exhausted"):
+    reason = (result.verification or {}).get("reason", "")
+    if result.status == "verified":
+        console.print(f"[green]Verified:[/green] {reason.strip().splitlines()[-1] if reason.strip() else 'check passed'}")
+    elif result.status == "unverified":
+        console.print(f"[yellow]Not verified[/yellow] (the check still fails after the repair rounds):\n{reason[-1500:]}")
+    elif result.status == "budget_exhausted":
         console.print(f"[yellow]Status: {result.status}[/yellow]")
     console.print(Rule(style="dim"))
 
