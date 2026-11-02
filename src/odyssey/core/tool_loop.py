@@ -45,9 +45,9 @@ async def execute_tool_call(call: ToolCall, conv: Conversation) -> None:
     else:
         _show_tool_call(call.name, call.arguments)
         started = time.monotonic()
-        result = await tool.run(**call.arguments)  # Tool.run reports exceptions as "Error ..." text
+        outcome = await tool.execute(**call.arguments)
+        result, ok = outcome.text, outcome.ok
         duration = time.monotonic() - started
-        ok = not result.startswith("Error")
     conv.add_tool_result(call.name, result[:MAX_TOOL_RESULT_CHARS], tool_call_id=call.id)
     conv.tool_log.append(ToolRecord(call.id, call.name, call.arguments, result, ok, duration))
 

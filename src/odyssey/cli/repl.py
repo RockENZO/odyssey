@@ -172,6 +172,6 @@ def _run_shell(cmd: str) -> None:
 def _find_project_root(cwd: str) -> str:
     path = Path(cwd).resolve()
     for parent in [path] + list(path.parents):
-        if (parent / ".git").is_dir():
+        if (parent / ".git").exists():  # a directory, or a file in worktrees and submodules
             return str(parent)
     return cwd

@@ -21,3 +21,15 @@ def test_installed_config_path_from_unrelated_directory(tmp_path):
         "assert 'chromadb' not in sys.modules"], cwd=tmp_path, env=env,
         capture_output=True, text=True, timeout=10)
     assert probe.returncode == 0, probe.stderr
+
+
+def test_project_root_recognises_git_worktrees_and_submodules(tmp_path):
+    """A linked worktree has a `.git` file, not a directory."""
+    from odyssey.cli.repl import _find_project_root
+    repo = tmp_path / "wt"
+    (repo / "src").mkdir(parents=True)
+    (repo / ".git").write_text("gitdir: /elsewhere/.git/worktrees/wt\n")
+    assert _find_project_root(str(repo / "src")) == str(repo)
+    plain = tmp_path / "plain"
+    (plain / ".git").mkdir(parents=True)
+    assert _find_project_root(str(plain)) == str(plain)

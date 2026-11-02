@@ -109,3 +109,19 @@ def test_tool_output_is_truncated_in_context_but_not_in_the_log(tmp_path):
     run(run_tool_loop("x", conv, chat=chat))
     assert len(next(m for m in conv.messages if m["role"] == "tool")["content"]) == 10000
     assert len(conv.tool_log[0].result) > 10000
+
+
+def test_ok_comes_from_the_shell_exit_code_not_from_the_output_text():
+    chat = scripted(
+        {"tool_calls": [
+            call("bash", command="echo partial output; exit 3"),   # output, but failed
+            call("bash", command="echo 'Error: this is just text'"),  # starts with Error, but succeeded
+            call("bash", command="exit 1"),                         # no output, failed
+            call("bash", command="sleep 5", timeout=1),            # timed out
+            call("bash", command="true"),
+        ]},
+        {"content": "ok"},
+    )
+    conv = Conversation()
+    run(run_tool_loop("x", conv, chat=chat))
+    assert [r.ok for r in conv.tool_log] == [False, True, False, False, True]

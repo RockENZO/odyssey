@@ -72,11 +72,16 @@ async def _finish_cleanup(process, interrupted):
 
 
 async def bash(command: str, timeout: int = 120) -> str:
+    return (await run_bash(command, timeout))[0]
+
+
+async def run_bash(command: str, timeout: int = 120) -> tuple[str, bool]:
+    """Run a command and return (output text, succeeded). Succeeded means exit code 0."""
     async with _lock:
         try:
             if (isinstance(timeout, bool) or not isinstance(timeout, (int, float))
                     or not math.isfinite(timeout) or timeout <= 0):
-                return "Error executing command: timeout must be finite and positive"
+                return "Error executing command: timeout must be finite and positive", False
             # Regular temporary files avoid pipe EOF waits on descendants that
             # escape the group. Creation is synchronous, with no cancellation
             # point between spawning a session and taking ownership of it.
@@ -100,12 +105,12 @@ async def bash(command: str, timeout: int = 120) -> str:
             output = output.replace("\r\n", "\n").replace("\r", "\n").strip()
             if not output:
                 if process.returncode == 0:
-                    return "[command completed successfully with no output]"
-                return f"[exit code {process.returncode}]"
+                    return "[command completed successfully with no output]", True
+                return f"[exit code {process.returncode}]", False
             if truncated or len(output) > MAX_OUTPUT_CHARS:
                 output = output[:MAX_OUTPUT_CHARS] + "\n... [output truncated at 30000 characters]"
-            return output
+            return output, process.returncode == 0
         except asyncio.TimeoutError:
-            return f"[command timed out after {timeout}s]"
+            return f"[command timed out after {timeout}s]", False
         except Exception as e:
-            return f"Error executing command: {e}"
+            return f"Error executing command: {e}", False
