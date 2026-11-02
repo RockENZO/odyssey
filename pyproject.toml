@@ -18,6 +18,13 @@ dependencies = [
     "langgraph-checkpoint-sqlite>=3.1.3",
 ]
 
+[project.optional-dependencies]
+# Completion gate: `odyssey --engine graph --verify "pytest -q"` records each check in a ledger.
+verify = ["transactional-agent-ledger>=0.1.0"]
+
+[tool.uv.sources]
+transactional-agent-ledger = { git = "https://github.com/RockENZO/transactional-agent-ledger", rev = "bf89fab" }
+
 [project.scripts]
 odyssey = "odyssey.cli.app:app"
 

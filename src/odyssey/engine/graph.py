@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import operator
 import time
+import uuid
 from typing import Annotated, Any, Awaitable, Callable, TypedDict
 
 from langgraph.graph import END, START, StateGraph
@@ -57,6 +58,7 @@ class AgentState(TypedDict, total=False):
     final: str
     verification: dict[str, Any]
     workspace: str  # project root the thread was started in; resume refuses a different one
+    turn_id: str  # one per user turn; tool-log entries carry it so a check can find this turn's calls
     base: str  # directory Odyssey was launched from: relative tool paths resolve against it
 
 
@@ -65,6 +67,7 @@ def new_turn(user_input: str, *, max_model_calls: int = 25, max_tool_calls: int 
     return {
         "workspace": workspace,
         "base": base,
+        "turn_id": uuid.uuid4().hex[:8],
         "approved": [],
         "messages": [{"role": "user", "content": user_input}],
         "pending": [],
@@ -76,6 +79,7 @@ def new_turn(user_input: str, *, max_model_calls: int = 25, max_tool_calls: int 
         "max_repairs": max_repairs,
         "status": "running",
         "final": "",
+        "verification": {},
     }
 
 
@@ -143,7 +147,7 @@ def build_graph(
         for c in needs:
             text = f"Rejected by the user: {reason}. The call was not run."
             messages.append({"role": "tool", "content": text, "tool_name": c["name"], "tool_call_id": c["id"]})
-            log.append({"call_id": c["id"], "name": c["name"], "arguments": c["arguments"], "result": text, "ok": False, "rejected": True, "duration_s": 0.0})
+            log.append({"call_id": c["id"], "name": c["name"], "arguments": c["arguments"], "result": text, "ok": False, "rejected": True, "duration_s": 0.0, "turn": state.get("turn_id")})
         return {
             "messages": messages,
             "tool_log": log,
@@ -189,7 +193,7 @@ def build_graph(
             result, ok = outcome.text, outcome.ok
         update.update(
             messages=[{"role": "tool", "content": result[:MAX_TOOL_RESULT_CHARS], "tool_name": call["name"], "tool_call_id": call["id"]}],
-            tool_log=[{"call_id": call["id"], "name": call["name"], "arguments": call["arguments"], "result": result[:MAX_LOGGED_RESULT_CHARS], "ok": ok, "rejected": False, "duration_s": round(time.monotonic() - started, 3)}],
+            tool_log=[{"call_id": call["id"], "name": call["name"], "arguments": call["arguments"], "result": result[:MAX_LOGGED_RESULT_CHARS], "ok": ok, "rejected": False, "duration_s": round(time.monotonic() - started, 3), "turn": state.get("turn_id")}],
             pending=rest,
             tool_calls_made=state.get("tool_calls_made", 0) + 1,
         )

@@ -25,15 +25,16 @@ def main(
     engine: str = typer.Option("loop", "--engine", help="Execution engine: 'loop' (default) or 'graph' (LangGraph, resumable, asks before bash/write/edit)"),
     resume: bool = typer.Option(False, "--resume", help="Graph engine: continue the last thread"),
     yes: bool = typer.Option(False, "--yes", help="Graph engine: do not ask for approval"),
+    verify: str = typer.Option("", "--verify", help="Graph engine: command that must pass before a turn that changed files counts as done, e.g. \"pytest -q\" (needs odyssey[verify])"),
 ):
     if version:
         console.print(f"Odyssey v{__version__}")
         raise typer.Exit()
     # Options given before the subcommand (`odyssey --engine graph repl`) must reach it.
-    ctx.obj = {"engine": engine, "resume": resume, "yes": yes}
+    ctx.obj = {"engine": engine, "resume": resume, "yes": yes, "verify": verify}
     if ctx.invoked_subcommand is not None:
         return
-    _launch_repl(engine, resume, yes)
+    _launch_repl(engine, resume, yes, verify)
 
 
 @app.command()
@@ -42,9 +43,10 @@ def repl(
     engine: str | None = typer.Option(None, "--engine", help="'loop' or 'graph'"),
     resume: bool = typer.Option(False, "--resume"),
     yes: bool = typer.Option(False, "--yes"),
+    verify: str = typer.Option("", "--verify"),
 ):
     root = ctx.obj or {}
-    _launch_repl(engine or root.get("engine", "loop"), resume or root.get("resume", False), yes or root.get("yes", False))
+    _launch_repl(engine or root.get("engine", "loop"), resume or root.get("resume", False), yes or root.get("yes", False), verify or root.get("verify", ""))
 
 
 @app.command()
@@ -70,12 +72,19 @@ def config_path():
     typer.echo(str(get_config_dir()))
 
 
-def _launch_repl(engine: str = "loop", resume: bool = False, yes: bool = False):
+def _launch_repl(engine: str = "loop", resume: bool = False, yes: bool = False, verify: str = ""):
     if engine not in ("loop", "graph"):
         raise typer.BadParameter("must be 'loop' or 'graph'", param_hint="--engine")
+    if verify and engine != "graph":
+        raise typer.BadParameter("only the graph engine can check completion (use --engine graph)", param_hint="--verify")
+    if verify:
+        try:
+            import agent_ledger  # noqa: F401
+        except ImportError:
+            raise typer.BadParameter("needs the ledger: pip install 'odyssey[verify]'", param_hint="--verify")
     from odyssey.cli.repl import run_repl
     cwd = os.getcwd()
-    asyncio.run(run_repl(cwd, engine, resume, yes))
+    asyncio.run(run_repl(cwd, engine, resume, yes, verify))
 
 
 if __name__ == "__main__":

@@ -81,7 +81,7 @@ $ uv run odyssey
 `odyssey --engine graph` runs the same tools on a LangGraph state machine instead of the hand-written loop. The default is still the loop; use the graph engine to try it.
 
 ```
-agent -> approve -> tools -> (tools | agent)
+agent -> gate -> approve -> tools -> (tools | agent)
 agent -> verify -> (agent | end)
 ```
 
@@ -90,7 +90,8 @@ agent -> verify -> (agent | end)
 - **What resume does not do.** A tool call that was running when the process died has no recorded result and runs again; Odyssey tells you which call it was. Checkpoints save the conversation state, not your files, so a half-applied edit stays applied.
 - **Plan.** `todo_write` now stores a structured plan in the graph state (`/plan` shows it) and the plan is given to the model on every step.
 - **Budgets.** Per turn, at most 25 model calls and 40 tool calls; the run stops with `budget_exhausted` instead of looping.
-- **Acceptance hook.** `build_graph(..., acceptance=...)` takes an async check that runs when the model answers without a tool call. A failure is sent back to the model for up to two repair rounds; the turn ends `verified`, `unverified` or `done` (no check configured). The CLI does not configure a check yet.
+- **Completion gate (optional).** `odyssey --engine graph --verify "pytest -q"` (install with `pip install 'odyssey[verify]'`) makes "done" a claim that has to pass a command. When the model answers after a turn that used `bash`, `write` or `edit`, the gate records a `task_complete` claim in a [transactional-agent-ledger](https://github.com/RockENZO/transactional-agent-ledger) database (`ledger.sqlite` in the data directory), with that turn's tool-call ids as provenance, runs the command in the project root, and marks the claim committed or rejected with the command's output. A failure goes back to the model for up to two repair rounds; if it still fails the turn ends `unverified`, every attempt stays in the ledger, and the REPL shows the output. Turns that only read are not checked. `build_graph(..., acceptance=...)` takes any async check, and `engine.verify.ledger_gate(argv, ledger_path=..., extra=...)` accepts another ledger verifier, for example one that pins the test files.
+- **What the gate does not do.** The command is not sandboxed. It checks only what the command checks: an agent that can edit the tests can make them pass unless you pin them. A failed check does not roll the project back: the ledger's `run_step` can snapshot and restore a workspace, but it copies the whole directory, which is not safe to do to a real repository on every turn.
 - **Sub-agents under approval.** A `task` sub-agent runs inside one graph step and cannot pause to ask, so tools that need approval (`bash`, `write`, `edit`) are refused there and the sub-agent is told to hand the step back. With `--yes`, or after `/approve always` for a tool, the sub-agent may use it.
 - **Not covered.** Sub-agents (`task`) still use the old loop inside the graph's `tools` step, not their own subgraph. The wall-clock time budget is not implemented. Not yet tried against a live Ollama model.
 
@@ -174,7 +175,7 @@ The only persistent background process is **Ollama** itself (`ollama serve`), wh
 src/odyssey/
 ├── cli/           # REPL entry point (prompt_toolkit)
 ├── core/          # Tool-calling loop, conversation state, tool-call ids, workspace boundary
-├── engine/        # LangGraph engine: graph, approval policy, plan, checkpointed sessions
+├── engine/        # LangGraph engine: graph, approval policy, plan, checkpointed sessions, ledger completion gate
 ├── tools/         # 17 tool implementations
 │   ├── bash.py          # shell execution
 │   ├── file_ops.py      # read, write, edit
