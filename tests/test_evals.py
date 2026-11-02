@@ -1,0 +1,117 @@
+"""The frozen task suite and the evaluation runner, driven by scripted models (no Ollama)."""
+import asyncio
+import json
+
+import pytest
+
+pytest.importorskip("agent_ledger")
+pytest.importorskip("trajectory_replay")
+
+from odyssey.evals import runner  # noqa: E402
+from odyssey.evals.suite import SUITE_HASH, TASKS, get_tasks, suite_hash  # noqa: E402
+
+
+def run_suite(tmp_path, chat_for, tasks=None, **kw):
+    out = tmp_path / "out"
+    kw.setdefault("model", "scripted")
+    kw.setdefault("kind", "oracle")
+    kw.setdefault("with_gold", False)           # the gold run doubles the time; only the test that needs it asks
+    report = asyncio.run(runner.run_suite(tasks or list(TASKS), chat_for, out, **kw))
+    return out, report
+
+
+def test_the_suite_is_frozen():
+    assert suite_hash() == SUITE_HASH, "a task changed: bump SUITE_VERSION and SUITE_HASH together"
+
+
+def test_every_task_is_well_formed():
+    ids = [t.id for t in TASKS]
+    assert len(ids) == len(set(ids)) == 10
+    for t in TASKS:
+        assert t.tests and all(p in t.files for p in t.tests), t.id
+        assert t.solution and all(p not in t.tests for p in t.solution), f"{t.id}: the solution must not touch the tests"
+
+
+def test_unknown_task_ids_are_reported():
+    with pytest.raises(KeyError, match="nope"):
+        get_tasks(["off_by_one", "nope"])
+
+
+def test_the_reference_solution_passes_every_task(tmp_path):
+    _, report = run_suite(tmp_path, runner.oracle_chat)
+    assert report["summary"]["passed"] == 10 and report["summary"]["gate_disagrees"] == 0
+
+
+def test_trajectory_f1_is_scored_against_the_reference(tmp_path):
+    tasks = get_tasks(["rename_function"])
+    _, report = run_suite(tmp_path, runner.oracle_chat, tasks, with_gold=True)
+    assert report["summary"]["mean_trajectory_f1"] == 1.0
+    _, lazy = run_suite(tmp_path / "lazy", runner.lazy_chat, tasks, with_gold=True)
+    assert lazy["summary"]["mean_trajectory_f1"] == 0.0
+
+
+def test_a_model_that_changes_nothing_fails_every_task(tmp_path):
+    """The checks are real: they fail on the starting files. The gate does not gate a turn that changed nothing."""
+    _, report = run_suite(tmp_path, runner.lazy_chat)
+    assert report["summary"]["passed"] == 0
+    assert report["summary"]["gate_disagrees"] == 10
+
+
+def test_editing_the_tests_does_not_pass(tmp_path):
+    task = get_tasks(["off_by_one"])[0]
+
+    def cheater(_task):
+        replies = [
+            {"tool_calls": [{"function": {"name": "write", "arguments": {"path": "tests/test_calc.py", "content": "def test_x():\n    pass\n"}}}]},
+            {"content": "done"},
+        ]
+        queue = replies * 3                      # the same cheat in every repair round
+
+        async def chat(messages):
+            return {"message": queue.pop(0) if queue else {"content": "done"}}
+
+        return chat
+
+    _, report = run_suite(tmp_path, cheater, [task])
+    [result] = report["results"]
+    assert result["passed"] is False and "wrong content" in result["detail"]
+    assert result["gate"] == "unverified" and result["repairs"] == 2
+
+
+def test_a_failing_model_is_a_result_not_a_crash(tmp_path):
+    def broken(_task):
+        async def chat(messages):
+            raise ConnectionError("ollama is not running")
+
+        return chat
+
+    _, report = run_suite(tmp_path, broken, get_tasks(["fizzbuzz", "slugify"]))
+    assert [r["gate"] for r in report["results"]] == ["error", "error"]
+    assert all("ConnectionError" in r["error"] and r["passed"] is False for r in report["results"])
+
+
+def test_a_slow_model_times_out(tmp_path):
+    def slow(_task):
+        async def chat(messages):
+            await asyncio.sleep(5)
+
+        return chat
+
+    _, report = run_suite(tmp_path, slow, get_tasks(["fizzbuzz"]), timeout=0.2)
+    assert report["results"][0]["gate"] == "timeout" and report["results"][0]["passed"] is False
+
+
+def test_the_report_is_written_and_says_when_it_is_not_a_model_result(tmp_path):
+    out, report = run_suite(tmp_path, runner.oracle_chat, get_tasks(["off_by_one", "rename_function"]))
+    data = json.loads((out / "report.json").read_text())
+    assert data["environment"]["kind"] == "oracle" and data["environment"]["suite"]["frozen_hash_matches"] is True
+    text = (out / "report.md").read_text()
+    assert "not a model result" in text and "off_by_one" in text and "| Task | Passed |" in text
+    assert (out / "cassettes" / "rename_function.json").exists()
+    assert (out / "ledger.sqlite").exists()
+
+
+def test_a_live_model_report_has_no_oracle_banner():
+    env = runner.environment("some-model", "model")
+    text = runner.render_markdown(env, [], runner.summarize([]))
+    assert "not a model result" not in text

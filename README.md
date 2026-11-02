@@ -96,6 +96,29 @@ agent -> verify -> (agent | end)
 - **Sub-agents under approval.** A `task` sub-agent runs inside one graph step and cannot pause to ask, so tools that need approval (`bash`, `write`, `edit`) are refused there and the sub-agent is told to hand the step back. With `--yes`, or after `/approve always` for a tool, the sub-agent may use it.
 - **Not covered.** Sub-agents (`task`) still use the old loop inside the graph's `tools` step, not their own subgraph. The wall-clock time budget is not implemented. Not yet tried against a live Ollama model.
 
+## Evaluation (experimental)
+
+`odyssey.evals` is a frozen suite of ten small Python tasks (fix an off-by-one, implement a function from its docstring, rename across files, and so on) and a runner that measures the graph engine on it. Each task is a tiny project whose tests fail at the start. Install with `pip install 'odyssey[verify,eval]'`.
+
+```
+python -m odyssey.evals --out results/run-1                 # live model through Ollama (the configured fast model, or --model NAME)
+python -m odyssey.evals --out results/oracle --oracle       # scripted reference solution: not a model result
+python -m odyssey.evals --out results/lazy --lazy           # scripted do-nothing model: the checks must fail
+```
+
+- **How a task is judged.** The agent works in a fresh directory with no approval prompts. When it finishes, the runner runs the project's tests itself, with the test files pinned to their original text, so editing a test to make it pass fails. That independent check is the result. The gate's own verdict is recorded next to it; the two can differ, and the report counts the disagreements.
+- **Frozen.** `suite_hash()` covers every prompt and file, and a test compares it with the recorded `SUITE_HASH`. Changing a task means bumping `SUITE_VERSION` and `SUITE_HASH` together and not comparing results across versions.
+- **What it writes.** `report.json`, `report.md` (device, model and digest when Ollama reports one, package versions, suite hash, one row per task), a cassette per task in `cassettes/`, and the ledger of every check in `ledger.sqlite`. Trajectory F1 against the reference solution is included as a diagnostic: a coding task has many valid trajectories.
+- **Checked without a model.** The reference solution passes all ten tasks and a do-nothing model fails all ten (tests in `tests/test_evals.py`), so each task is solvable and each check is real. Those two runs are labelled "not a model result" in their reports.
+- **A known gap.** The gate does not check a turn that changed nothing, so a model that says "it looks fine" without touching the files is reported `verified` by the gate. The independent check still fails it, which is why the report keeps both columns.
+- **Limits.** Ten short single-language tasks say little about large codebases, other languages or vague requests. Runs use temperature 0, which is not bit-exact on every backend.
+
+### Results
+
+| Model | Device | Passed | Date |
+| --- | --- | --- | --- |
+| _none yet_ | | | |
+
 ## Quick Start
 
 ### Prerequisites
