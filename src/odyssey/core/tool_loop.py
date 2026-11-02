@@ -1,3 +1,4 @@
+import contextvars
 import time
 from typing import Any, Awaitable, Callable
 
@@ -36,11 +37,21 @@ ChatFn = Callable[[list[dict[str, Any]]], Awaitable[dict[str, Any]]]
 
 MAX_TOOL_RESULT_CHARS = 10000
 
+# Set by the graph engine while it runs a tool that starts a nested loop (the ``task`` sub-agent).
+# It returns True for tool names that must not run there because they need a person's approval,
+# which a nested loop has no way to ask for.
+blocked_tool: contextvars.ContextVar[Callable[[str], bool] | None] = contextvars.ContextVar("blocked_tool", default=None)
+
 
 async def execute_tool_call(call: ToolCall, conv: Conversation) -> None:
     """Run one tool call and record the result, with the call's id, on the conversation."""
     tool = get_tool(call.name)
-    if tool is None:
+    gate = blocked_tool.get()
+    if tool is not None and gate is not None and gate(call.name):
+        result, ok, duration = (
+            f"Refused: '{call.name}' needs the user's approval, and a sub-agent cannot ask for it. "
+            "Do this step in the main conversation instead.", False, 0.0)
+    elif tool is None:
         result, ok, duration = f"Error: tool '{call.name}' not found", False, 0.0
     else:
         _show_tool_call(call.name, call.arguments)

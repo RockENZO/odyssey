@@ -70,11 +70,29 @@ $ uv run odyssey
 
 - **Workspace boundary.** In the REPL the `read`, `write`, `edit`, `glob` and `grep` tools are confined to the project root (the nearest parent with a `.git` directory, otherwise the launch directory). Paths outside it, including symlinks that point outside, are refused. Set `ODYSSEY_ALLOW_OUTSIDE_WORKSPACE=1` to lift this. **`bash` is not sandboxed and is not covered by the boundary**; it starts in the launch directory and can reach anything your user can.
 - **Tool-call ids.** Every tool call gets an id, and its result is stored with that id and the tool name. Executed calls are also kept in `Conversation.tool_log` with arguments, result and duration.
-- **No resume yet.** The conversation lives in memory. `/save` writes a jsonl copy for reading; there is no way to continue a session or a half-finished task after the process exits.
-- **No acceptance check.** A task ends when the model answers without calling a tool. Nothing runs the tests for it.
-- **`todo_write` is a text echo.** It returns the list it was given and keeps no state.
+- **No resume in the default loop.** The conversation lives in memory. `/save` writes a jsonl copy for reading. Use `--engine graph` for resumable runs.
+- **No acceptance check by default.** A task ends when the model answers without calling a tool. Nothing runs the tests for it.
+- **`todo_write` is a text echo in the default loop.** The graph engine keeps a real plan.
 - **Sub-agents are sequential.** `task` runs the same loop again in a fresh conversation, with the same tools and shell; it has no separate workspace or permissions.
-- **`langgraph` is declared but not used yet.** It is a dependency for the planned graph-based engine, not part of the current loop.
+- **The default loop does not use `langgraph`.** Only the opt-in graph engine does.
+
+## Graph engine (experimental): resumable runs with approvals
+
+`odyssey --engine graph` runs the same tools on a LangGraph state machine instead of the hand-written loop. The default is still the loop; use the graph engine to try it.
+
+```
+agent -> approve -> tools -> (tools | agent)
+agent -> verify -> (agent | end)
+```
+
+- **Approvals.** `bash`, `write` and `edit` pause the run and wait. `/approve` runs the call (`/approve always` stops asking for that tool in this session), `/reject [reason]` refuses it and tells the model why. `--yes` disables the prompts. Read-only tools, memory, tasks and web tools run without asking.
+- **Checkpoints and resume.** After every step the graph state is saved to a SQLite file in the data directory (`checkpoints.sqlite`), with synchronous durability. If the process is killed, `odyssey --engine graph --resume` continues the last thread started from the same directory (Odyssey keeps one per launch directory and refuses to run a thread from another directory) and `/resume` finishes the interrupted turn. A test kills a real process mid-turn and resumes it.
+- **What resume does not do.** A tool call that was running when the process died has no recorded result and runs again; Odyssey tells you which call it was. Checkpoints save the conversation state, not your files, so a half-applied edit stays applied.
+- **Plan.** `todo_write` now stores a structured plan in the graph state (`/plan` shows it) and the plan is given to the model on every step.
+- **Budgets.** Per turn, at most 25 model calls and 40 tool calls; the run stops with `budget_exhausted` instead of looping.
+- **Acceptance hook.** `build_graph(..., acceptance=...)` takes an async check that runs when the model answers without a tool call. A failure is sent back to the model for up to two repair rounds; the turn ends `verified`, `unverified` or `done` (no check configured). The CLI does not configure a check yet.
+- **Sub-agents under approval.** A `task` sub-agent runs inside one graph step and cannot pause to ask, so tools that need approval (`bash`, `write`, `edit`) are refused there and the sub-agent is told to hand the step back. With `--yes`, or after `/approve always` for a tool, the sub-agent may use it.
+- **Not covered.** Sub-agents (`task`) still use the old loop inside the graph's `tools` step, not their own subgraph. The wall-clock time budget is not implemented. Not yet tried against a live Ollama model.
 
 ## Quick Start
 
@@ -156,6 +174,7 @@ The only persistent background process is **Ollama** itself (`ollama serve`), wh
 src/odyssey/
 ├── cli/           # REPL entry point (prompt_toolkit)
 ├── core/          # Tool-calling loop, conversation state, tool-call ids, workspace boundary
+├── engine/        # LangGraph engine: graph, approval policy, plan, checkpointed sessions
 ├── tools/         # 17 tool implementations
 │   ├── bash.py          # shell execution
 │   ├── file_ops.py      # read, write, edit

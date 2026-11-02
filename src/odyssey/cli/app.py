@@ -22,18 +22,29 @@ console = Console()
 def main(
     ctx: typer.Context,
     version: bool = typer.Option(False, "--version", "-V", help="Show version"),
+    engine: str = typer.Option("loop", "--engine", help="Execution engine: 'loop' (default) or 'graph' (LangGraph, resumable, asks before bash/write/edit)"),
+    resume: bool = typer.Option(False, "--resume", help="Graph engine: continue the last thread"),
+    yes: bool = typer.Option(False, "--yes", help="Graph engine: do not ask for approval"),
 ):
     if version:
         console.print(f"Odyssey v{__version__}")
         raise typer.Exit()
+    # Options given before the subcommand (`odyssey --engine graph repl`) must reach it.
+    ctx.obj = {"engine": engine, "resume": resume, "yes": yes}
     if ctx.invoked_subcommand is not None:
         return
-    _launch_repl()
+    _launch_repl(engine, resume, yes)
 
 
 @app.command()
-def repl():
-    _launch_repl()
+def repl(
+    ctx: typer.Context,
+    engine: str | None = typer.Option(None, "--engine", help="'loop' or 'graph'"),
+    resume: bool = typer.Option(False, "--resume"),
+    yes: bool = typer.Option(False, "--yes"),
+):
+    root = ctx.obj or {}
+    _launch_repl(engine or root.get("engine", "loop"), resume or root.get("resume", False), yes or root.get("yes", False))
 
 
 @app.command()
@@ -59,10 +70,12 @@ def config_path():
     typer.echo(str(get_config_dir()))
 
 
-def _launch_repl():
+def _launch_repl(engine: str = "loop", resume: bool = False, yes: bool = False):
+    if engine not in ("loop", "graph"):
+        raise typer.BadParameter("must be 'loop' or 'graph'", param_hint="--engine")
     from odyssey.cli.repl import run_repl
     cwd = os.getcwd()
-    asyncio.run(run_repl(cwd))
+    asyncio.run(run_repl(cwd, engine, resume, yes))
 
 
 if __name__ == "__main__":
