@@ -21,11 +21,14 @@ class Tool:
         description: str,
         fn: Callable[..., Awaitable[str]],
         parameters: dict[str, Any] | None = None,
+        read_only: bool = False,
     ):
         self.name = name
         self.description = description
         self.fn = fn
         self.parameters = parameters or {}
+        # Only meaningful for tools that come from outside (MCP): the built-ins are classified by name.
+        self.read_only = read_only
 
     async def execute(self, **kwargs: Any) -> ToolOutcome:
         """Run the tool. Tools that return a ``ToolOutcome`` report their own success; for the
@@ -62,6 +65,10 @@ _tools: dict[str, Tool] = {}
 
 def register(t: Tool) -> None:
     _tools[t.name] = t
+
+
+def unregister(name: str) -> None:
+    _tools.pop(name, None)
 
 
 def get_tool(name: str) -> Tool | None:
