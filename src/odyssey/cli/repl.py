@@ -1,3 +1,4 @@
+import contextlib
 import os
 import shlex
 from pathlib import Path
@@ -45,12 +46,51 @@ Graph engine only (`odyssey --engine graph`):
   /plan               Show the structured plan (todo_write)
   /thread             Show this session's thread id
   /cassette [path]    Save this thread's tool calls as a trajectory-replay cassette (needs odyssey[eval])
+  /mcp                Show the MCP servers and tools in use (config: mcp.json, needs odyssey[mcp])
 
 Prefix a command with `!` to run it directly in the shell without AI interpretation.
 """
 
 
-async def run_repl(cwd: str, engine: str = "loop", resume: bool = False, approve_all: bool = False, verify: str = "") -> None:
+@contextlib.asynccontextmanager
+async def _mcp_session(policy, explicit: str, graph: bool):
+    """Connect the MCP servers of the user's config for the life of the session; yield the runtime or None."""
+    path = Path(explicit).expanduser() if explicit else get_config_dir() / "mcp.json"
+    if not explicit and not path.exists():
+        yield None
+        return
+    if not graph:
+        console.print(f"[dim]{path} is ignored: MCP tools need the approval step of the graph engine (--engine graph).[/dim]")
+        yield None
+        return
+    from odyssey import mcp_client
+    async with contextlib.AsyncExitStack() as stack:
+        runtime = None
+        try:  # only the set-up is guarded: an error inside the session must not be taken for an MCP error
+            configs = mcp_client.load_config(path)
+            runtime = await stack.enter_async_context(mcp_client.connect(configs, policy, get_data_dir()))
+        except (mcp_client.ConfigError, RuntimeError) as e:
+            console.print(f"[red]MCP is off: {e}[/red]")
+        yield runtime
+
+
+def _show_mcp(runtime) -> None:
+    if runtime is None:
+        console.print("[dim]No MCP servers are in use. Put a config in mcp.json in the config directory (odyssey config-dir) or pass --mcp-config.[/dim]")
+        return
+    for server in runtime.servers:
+        state = "[green]connected[/green]" if server.connected else "[red]not connected[/red]"
+        console.print(f"[bold]{server.name}[/bold] {state} {server.detail}")
+        from odyssey.tools.registry import get_tool
+        for name in server.tools:
+            tool = get_tool(name)
+            kind = "read-only" if tool and tool.read_only else "may change things"
+            console.print(f"  {name} [dim]({kind})[/dim]")
+    for warning in runtime.warnings:
+        console.print(f"[yellow]{warning}[/yellow]")
+
+
+async def run_repl(cwd: str, engine: str = "loop", resume: bool = False, approve_all: bool = False, verify: str = "", mcp_config: str = "") -> None:
     init_tools()
     project_root = _find_project_root(cwd)
     conv = Conversation(working_dir=cwd, project_root=project_root)
@@ -69,17 +109,26 @@ async def run_repl(cwd: str, engine: str = "loop", resume: bool = False, approve
     ))
     console.print()
 
-    if engine == "graph":
-        from odyssey.engine.session import default_db_path, open_checkpointer
-        async with open_checkpointer(default_db_path()) as saver:
-            gs = await _start_graph_session(saver, resume, approve_all, project_root, cwd, verify)
-            await _sync_conv(conv, gs)
-            await _repl_loop(conv, gs)
-    else:
-        await _repl_loop(conv, None)
+    from odyssey.engine.policy import ApprovalPolicy
+    policy = ApprovalPolicy(approve_all=approve_all)
+    async with _mcp_session(policy, mcp_config, engine == "graph") as mcp_runtime:
+        if engine == "graph":
+            from odyssey.engine.session import default_db_path, open_checkpointer
+            async with open_checkpointer(default_db_path()) as saver:
+                gs = await _start_graph_session(saver, resume, approve_all, project_root, cwd, verify, policy=policy)
+                gs.mcp = mcp_runtime
+                if mcp_runtime is not None:
+                    names = ", ".join(f"{s.name} ({len(s.tools)} tools)" for s in mcp_runtime.servers if s.connected) or "none connected"
+                    console.print(f"[dim]MCP: {names}. /mcp shows details.[/dim]")
+                    for warning in mcp_runtime.warnings:
+                        console.print(f"[yellow]MCP: {warning}[/yellow]")
+                await _sync_conv(conv, gs)
+                await _repl_loop(conv, gs)
+        else:
+            await _repl_loop(conv, None)
 
 
-async def _start_graph_session(saver, resume: bool, approve_all: bool, workspace: str = "", base: str = "", verify: str = ""):
+async def _start_graph_session(saver, resume: bool, approve_all: bool, workspace: str = "", base: str = "", verify: str = "", policy=None):
     from odyssey.engine.graph import build_graph
     from odyssey.engine.policy import ApprovalPolicy
     from odyssey.engine.session import GraphSession, new_thread_id, recall_thread, remember_thread
@@ -87,7 +136,7 @@ async def _start_graph_session(saver, resume: bool, approve_all: bool, workspace
 
     base = base or workspace
     thread_id = new_thread_id()
-    policy = ApprovalPolicy(approve_all=approve_all)
+    policy = policy or ApprovalPolicy(approve_all=approve_all)
     acceptance = None
     if verify:
         import shlex
@@ -156,7 +205,7 @@ async def _handle_graph_slash(cmd: str, gs, conv: Conversation) -> bool:
     """Handle the graph-only commands. Returns True when the command was one of them."""
     parts = cmd.split(maxsplit=1)
     command, arg = parts[0].lower(), (parts[1] if len(parts) > 1 else "")
-    if command not in ("/approve", "/reject", "/resume", "/plan", "/thread", "/clear", "/cassette"):
+    if command not in ("/approve", "/reject", "/resume", "/plan", "/thread", "/clear", "/cassette", "/mcp"):
         return False
     try:
         if command == "/clear":
@@ -178,6 +227,8 @@ async def _handle_graph_slash(cmd: str, gs, conv: Conversation) -> bool:
             target = Path(arg.strip()).expanduser() if arg.strip() else get_data_dir() / "cassettes" / f"{gs.thread_id}.json"
             count = save_cassette(await gs.state(), target)
             console.print(f"[dim]Saved {count} tool calls to {target}[/dim]")
+        elif command == "/mcp":
+            _show_mcp(getattr(gs, "mcp", None))
         elif command == "/plan":
             from odyssey.engine.todos import format_todos
             console.print(format_todos((await gs.state()).get("todos", [])))

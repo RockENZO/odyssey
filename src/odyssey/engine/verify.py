@@ -33,6 +33,22 @@ from odyssey.engine.graph import Acceptance
 CHANGING_TOOLS = frozenset({"bash", "write", "edit", "task"})
 
 
+def changes_project(name: str) -> bool:
+    """Whether a call to this tool can change the project and so needs the completion check.
+
+    An MCP tool counts unless its server marked it read-only (``readOnlyHint``). A tool that is no
+    longer registered, for example on a resumed thread, counts too.
+    """
+    if name in CHANGING_TOOLS:
+        return True
+    if not name.startswith("mcp__"):
+        return False
+    from odyssey.tools.registry import get_tool
+
+    tool = get_tool(name)
+    return tool is None or not tool.read_only
+
+
 def ledger_gate(
     argv: Sequence[str],
     *,
@@ -68,7 +84,7 @@ def ledger_gate(
     async def accept(state: dict[str, Any]) -> tuple[bool, str]:
         turn = state.get("turn_id")
         calls = [e for e in state.get("tool_log", []) if e.get("turn") == turn and not e.get("rejected")]
-        if not any(e["name"] in CHANGING_TOOLS for e in calls):
+        if not any(changes_project(e["name"]) for e in calls):
             return True, "no files were changed this turn, so there was nothing to check"
         claim = (
             "task_complete",
