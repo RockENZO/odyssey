@@ -202,3 +202,51 @@ def test_the_name_filter_holds_even_if_the_registry_is_not_narrowed(tmp_path):
 
     state = run(go())
     assert not (tmp_path / "x.txt").exists() and state["used"] == []
+
+
+def test_each_graph_investigates_with_its_own_model(tmp_path):
+    """A second graph built in the same process must not take over the first one's investigations."""
+    replies = iter([{"tool_calls": [call("investigate", questions=["where?"])]}, {"content": "done"}])
+
+    async def chat_a(messages):
+        if is_investigator(messages):
+            return {"message": {"content": "answer from graph A"}}
+        return {"message": next(replies)}
+
+    async def chat_b(messages):
+        raise AssertionError("graph B's model was used for graph A's investigation")
+
+    async def go():
+        policy = ApprovalPolicy()
+        graph_a = build_graph(chat_a, checkpointer=MemorySaver(), policy=policy)
+        build_graph(chat_b, checkpointer=MemorySaver(), policy=policy)      # built later, same process
+        session = GraphSession(graph_a, "t", policy)
+        result = await session.submit("look")
+        return result, (await session.state())["tool_log"]
+
+    result, log = run(go())
+    assert result.status == "done"
+    assert log[0]["ok"] and "answer from graph A" in log[0]["result"]
+
+
+def test_four_long_answers_all_reach_the_main_agent(tmp_path):
+    """The graph cuts a tool result at 10000 characters; the report must fit so no answer is dropped."""
+    from odyssey.core.tool_loop import MAX_TOOL_RESULT_CHARS
+
+    async def chat(messages):
+        n = messages[1]["content"][0]
+        return {"message": {"content": f"ANSWER-{n} " + "x" * 6000}}
+
+    questions = [f"{n} " + "q" * 1900 for n in range(1, 5)]
+    outcome = run(run_investigators(chat, questions))
+    assert len(outcome.text) <= MAX_TOOL_RESULT_CHARS, len(outcome.text)
+    assert all(f"ANSWER-{n}" in outcome.text for n in range(1, 5))
+    assert outcome.text.count("[cut: too long]") == 4 and outcome.text.count("(no tools; 1 model calls)") == 4
+
+
+def test_a_short_answer_is_not_cut():
+    async def chat(messages):
+        return {"message": {"content": "short"}}
+
+    outcome = run(run_investigators(chat, ["a", "b"]))
+    assert "cut" not in outcome.text and outcome.text.count("short") == 2

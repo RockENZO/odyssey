@@ -40,7 +40,9 @@ MAX_QUESTION_CHARS = 2000
 MAX_MODEL_CALLS = 8
 MAX_TOOL_CALLS = 16
 MAX_RESULT_CHARS = 6000   # one tool result, as shown to an investigator
-MAX_ANSWER_CHARS = 4000   # one answer, as returned to the main agent
+MAX_ANSWER_CHARS = 4000   # one answer, as returned to the main agent (an upper bound; see TOTAL_RESULT_CHARS)
+TOTAL_RESULT_CHARS = 9000  # all answers together; the graph cuts a tool result at 10000, so stay under it
+MAX_QUESTION_SHOWN = 200   # how much of each question is echoed back in the report
 
 PROMPT = """You are a read-only code investigator working for another agent.
 You can only use read, glob and grep. You cannot change files or run commands, and you must not say that you did.
@@ -116,27 +118,46 @@ async def run_investigators(chat: ChatFn, questions: Any) -> ToolOutcome:
 
     investigator = build_investigator(chat)
 
-    async def one(question: str) -> tuple[str, bool]:
+    async def one(question: str) -> tuple[str, str, bool]:
         try:
             state = await investigator.ainvoke({"messages": [{"role": "user", "content": question}], "pending": [], "model_calls": 0, "tool_calls": 0, "used": [], "answer": ""})
         except Exception as e:  # one investigator failing must not lose the others' answers
-            return f"Error: {type(e).__name__}: {e}", False
+            return f"Error: {type(e).__name__}: {e}", "", False
         answer = (state.get("answer") or "").strip() or "No answer."
-        return f"{answer[:MAX_ANSWER_CHARS]}\n{_trace(state)}", not answer.startswith("Stopped:")
+        return answer, _trace(state), not answer.startswith("Stopped:")
 
     # Only the read-only tools exist (and are shown to the model) while the investigators run. The
     # main agent is waiting for this call, so nothing else uses the registry meanwhile.
     with only_tools(INVESTIGATOR_TOOLS):
         results = await asyncio.gather(*(one(q) for q in questions))
-    parts = [f"Investigation {i} of {len(questions)}: {q.strip()}\n{text}" for i, (q, (text, _)) in enumerate(zip(questions, results), 1)]
-    return ToolOutcome("\n\n".join(parts), any(ok for _, ok in results))
+    parts = _report(questions, [(answer, trace) for answer, trace, _ in results])
+    return ToolOutcome("\n\n".join(parts), any(ok for _, _, ok in results))
 
 
-def register_investigate(chat: ChatFn) -> None:
-    """Offer the ``investigate`` tool, answering with ``chat``. Called by the graph engine."""
+def _report(questions: list[str], answers: list[tuple[str, str]]) -> list[str]:
+    """One block per question. The blocks together stay under TOTAL_RESULT_CHARS, so the graph's own
+    cut of a long tool result never drops a whole answer: each gets an equal share of what is left."""
+    headers = [f"Investigation {i} of {len(questions)}: {q.strip()[:MAX_QUESTION_SHOWN]}\n" for i, q in enumerate(questions, 1)]
+    spent = sum(len(h) + len(trace) + 3 for h, (_, trace) in zip(headers, answers)) + 2 * len(headers)
+    share = min(MAX_ANSWER_CHARS, max(200, (TOTAL_RESULT_CHARS - spent) // len(headers)))
+    blocks = []
+    for header, (answer, trace) in zip(headers, answers):
+        if len(answer) > share:
+            answer = answer[: share - 16].rstrip() + " [cut: too long]"
+        blocks.append(header + answer + ("\n" + trace if trace else ""))
+    return blocks
+
+
+def register_investigate() -> None:
+    """Offer the ``investigate`` tool to the model (its schema).
+
+    The tool is not bound to a model here: the graph engine answers the call itself, with the model
+    of the graph that received it (see ``tools`` in ``engine.graph``). Binding a model into the
+    global registry would let a second graph in the same process take over the first one's calls.
+    """
 
     async def investigate(questions: Any = None) -> ToolOutcome:
-        return await run_investigators(chat, questions)
+        return ToolOutcome("Error: investigate only runs inside the graph engine (odyssey --engine graph).", False)
 
     registry.register(Tool(
         name="investigate",

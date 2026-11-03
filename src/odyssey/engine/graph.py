@@ -98,9 +98,9 @@ def build_graph(
     acceptance: Acceptance | None = None,
 ):
     policy = policy or ApprovalPolicy()
-    from odyssey.engine.investigate import register_investigate
+    from odyssey.engine.investigate import register_investigate, run_investigators
 
-    register_investigate(chat)
+    register_investigate()
 
     async def agent(state: AgentState) -> dict[str, Any]:
         if state.get("model_calls", 0) >= state.get("max_model_calls", 25):
@@ -183,6 +183,10 @@ def build_graph(
             todos = parse_todos(call["arguments"].get("items", ""))
             update["todos"] = todos
             result, ok = "Plan updated:\n" + format_todos(todos), True
+        elif call["name"] == "investigate":
+            # Answered here, with this graph's own model, not through the registry (which is global).
+            outcome = await run_investigators(chat, call["arguments"].get("questions"))
+            result, ok = outcome.text, outcome.ok
         elif (tool := get_tool(call["name"])) is None:
             result, ok = f"Error: tool '{call['name']}' not found", False
         else:
