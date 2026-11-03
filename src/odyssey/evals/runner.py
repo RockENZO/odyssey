@@ -125,6 +125,18 @@ def _independent_check(task: Task, workdir: Path, out_dir: Path) -> tuple[bool, 
     return True, f"{tests} tests passed"
 
 
+def _shapes(calls: list) -> list:
+    """Calls reduced to tool name and target path, so a rewritten file is compared by where, not by its exact text.
+
+    Scoring the full arguments gave 0.00 for every real model: it would have to reproduce the
+    reference file byte for byte (and the model that read first or used edit would never match).
+    """
+    import dataclasses
+
+    keep = ("path", "file_path", "pattern")
+    return [dataclasses.replace(c, arguments={k: v for k, v in c.arguments.items() if k in keep}, result=None, error=None) for c in calls]
+
+
 def _empty_config(out_dir: Path) -> str:
     """An empty pytest config outside the task directory, so a pytest.ini the agent adds is never read."""
     path = out_dir / "empty-pytest.ini"
@@ -144,6 +156,7 @@ async def run_task(
     tools: tuple[str, ...] = EVAL_TOOLS,
 ) -> tuple[TaskResult, list]:
     """Run one task. Returns the result and the executed tool calls as cassette steps."""
+    out_dir = out_dir.resolve()  # the checks run in the task directory, so a relative path would point into it
     from agent_ledger import ExpectedStateVerifier
 
     from odyssey.core import workspace
@@ -204,7 +217,7 @@ async def run_task(
     )
     if gold:
         from trajectory_replay import score
-        result.trajectory_f1 = round(score(calls, gold).f1, 3)
+        result.trajectory_f1 = round(score(_shapes(calls), _shapes(gold)).f1, 3)
     (out_dir / "cassettes").mkdir(parents=True, exist_ok=True)
     from trajectory_replay import save
     save(calls, out_dir / "cassettes" / f"{task.id}.json")
@@ -297,6 +310,7 @@ async def run_suite(
 
     if importlib.util.find_spec("pytest") is None:
         raise RuntimeError("the checks run pytest, which is not installed: pip install 'odyssey[verify,eval]'")
+    out_dir = out_dir.resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
     results: list[TaskResult] = []
     for task in tasks:

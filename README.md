@@ -109,7 +109,7 @@ python -m odyssey.evals --out results/lazy --lazy           # scripted do-nothin
 - **Tools.** An evaluated model runs unattended with approvals off, so it gets only `read`, `write`, `edit`, `glob`, `grep` and `todo_write`: no shell, no web, and none of the tools that write to your own memory, journal or task list. File tools stay inside the task directory. The gate runs the tests and gives failures back, so the model does not need a shell to iterate. `--allow-bash` adds the shell back; it is not sandboxed. The report lists the tools offered.
 - **How a task is judged.** The agent works in a fresh directory with no approval prompts. When it finishes, the runner runs the project's tests itself, with the test files pinned to their original text, so editing a test to make it pass fails. The check ignores anything the agent could plant in the directory (`conftest.py`, `pytest.ini`) and requires the exact number of test cases to run and pass, so skipping the tests does not count. That independent check is the result. The gate's own verdict is recorded next to it; the two can differ, and the report counts the disagreements.
 - **Frozen.** `suite_hash()` covers every prompt and file, and a test compares it with the recorded `SUITE_HASH`. Changing a task means bumping `SUITE_VERSION` and `SUITE_HASH` together and not comparing results across versions.
-- **What it writes.** `report.json`, `report.md` (device, model and digest when Ollama reports one, package versions, suite hash, one row per task), a cassette per task in `cassettes/`, and the ledger of every check in `ledger.sqlite`. Trajectory F1 against the reference solution is included as a diagnostic: a coding task has many valid trajectories.
+- **What it writes.** `report.json`, `report.md` (device, model and digest when Ollama reports one, package versions, suite hash, one row per task), a cassette per task in `cassettes/`, and the ledger of every check in `ledger.sqlite`. Trajectory F1 against the reference solution (tool name and target path, not file text) is included as a diagnostic: a coding task has many valid trajectories.
 - **Checked without a model.** The reference solution passes all ten tasks and a do-nothing model fails all ten (tests in `tests/test_evals.py`), so each task is solvable and each check is real. Those two runs are labelled "not a model result" in their reports.
 - **A known gap.** The gate does not check a turn that changed nothing, so a model that says "it looks fine" without touching the files is reported `verified` by the gate. The independent check still fails it, which is why the report keeps both columns.
 - **Limits.** Ten short single-language tasks say little about large codebases, other languages or vague requests. Runs use temperature 0, which is not bit-exact on every backend.
@@ -118,7 +118,9 @@ python -m odyssey.evals --out results/lazy --lazy           # scripted do-nothin
 
 | Model | Device | Passed | Date |
 | --- | --- | --- | --- |
-| _none yet_ | | | |
+| `qwen3.8:27b-mlx` (Ollama 0.40.13, id `5642e97495e1`, nvfp4) | Apple-silicon Mac (Darwin arm64), Python 3.13 | 10 of 10 (independent check) | 2026-11-03 |
+
+One run, suite version 1 (hash `2419f570a45a`), tools `read, write, edit, glob, grep, todo_write`, no bash. The gate and the independent check agreed on all ten tasks, no task needed a repair, and the run took 485 s in total (median 7.5 tool calls per task). This shows that the pipeline runs end to end with a real local model and produces checkable verdicts; it is not a measure of the model's coding ability. The tasks are ten short single-file problems, there was a single run, and temperature 0 is not bit-exact. The trajectory column of that run's report compared whole file contents and read 0.00 for every task, which says nothing; the comparison now uses the tool and target path.
 
 ## Quick Start
 
