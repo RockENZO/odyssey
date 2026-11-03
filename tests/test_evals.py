@@ -220,3 +220,23 @@ def test_missing_pytest_is_reported_before_the_suite_starts(tmp_path, monkeypatc
     monkeypatch.setattr(importlib.util, "find_spec", lambda name, *a, **k: None if name == "pytest" else real(name, *a, **k))
     with pytest.raises(RuntimeError, match=r"odyssey\[verify,eval\]"):
         run_suite(tmp_path, runner.oracle_chat, get_tasks(["fizzbuzz"]))
+
+
+def test_a_relative_output_directory_works(tmp_path, monkeypatch):
+    """The checks run inside the task directory; a relative --out used to point into it and fail every check."""
+    monkeypatch.chdir(tmp_path)
+    tasks = get_tasks(["off_by_one"])
+    report = asyncio.run(runner.run_suite(tasks, runner.oracle_chat, runner.Path("rel-out"), model="scripted", kind="oracle", with_gold=False))
+    assert report["summary"]["passed"] == 1, report["results"][0]["detail"]
+    assert (tmp_path / "rel-out" / "report.json").exists()
+
+
+def test_trajectory_f1_ignores_the_exact_file_text_but_not_the_path():
+    from trajectory_replay import ToolCall, score
+
+    gold = [ToolCall("write", {"path": "a.py", "content": "reference text"})]
+    other_text = [ToolCall("read", {"path": "a.py"}), ToolCall("write", {"path": "a.py", "content": "a different but valid fix"})]
+    assert score(other_text, gold).f1 == 0.0                           # the old comparison: always zero for a real model
+    assert score(runner._shapes(other_text), runner._shapes(gold)).f1 > 0.0
+    elsewhere = [ToolCall("write", {"path": "b.py", "content": "reference text"})]
+    assert score(runner._shapes(elsewhere), runner._shapes(gold)).f1 == 0.0
