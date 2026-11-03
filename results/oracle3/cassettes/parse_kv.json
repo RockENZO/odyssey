@@ -1,0 +1,12 @@
+[
+  {
+    "arguments": {
+      "content": "\"\"\"Configuration helpers.\"\"\"\n\n\ndef parse_kv(text):\n    result = {}\n    for line in text.splitlines():\n        line = line.strip()\n        if not line or line.startswith(\"#\"):\n            continue\n        key, _, value = line.partition(\"=\")\n        result[key.strip()] = value.strip()\n    return result\n",
+      "path": "config.py"
+    },
+    "call_id": "call_22eea3d57d49",
+    "error": null,
+    "name": "write",
+    "result": "Written 302 bytes to config.py"
+  }
+]

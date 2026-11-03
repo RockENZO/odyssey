@@ -1,0 +1,109 @@
+[
+  {
+    "arguments": {
+      "path": "config.py"
+    },
+    "call_id": "call_20e40bc547d9",
+    "error": null,
+    "name": "read",
+    "result": "1:\"\"\"Configuration helpers.\"\"\"\n"
+  },
+  {
+    "arguments": {
+      "path": "tests/test_config.py"
+    },
+    "call_id": "call_8f985fe0ad89",
+    "error": null,
+    "name": "read",
+    "result": "1:from config import parse_kv\n2:\n3:\n4:def test_parse_kv():\n5:    text = \"# comment\\n\\nname = odyssey\\n url=http://x/?a=b \\n\"\n6:    assert parse_kv(text) == {\"name\": \"odyssey\", \"url\": \"http://x/?a=b\"}\n7:\n8:\n9:def test_empty():\n10:    assert parse_kv(\"\") == {}\n"
+  },
+  {
+    "arguments": {
+      "new_string": "\"\"\"Configuration helpers.\"\"\"\n\n\ndef parse_kv(text):\n    \"\"\"Parse lines of `key = value` into a dict.\n\n    Blank lines and lines starting with '#' are ignored.\n    Whitespace around keys and values is stripped.\n    A value may itself contain '='.\n    \"\"\"\n    result = {}\n    for line in text.splitlines():\n        stripped = line.strip()\n        if not stripped or stripped.startswith(\"#\"):\n            continue\n        key, _, value = stripped.partition(\"=\")\n        result[key.strip()] = value.strip()\n    return result",
+      "old_string": "\"\"\"Configuration helpers.\"\"\"",
+      "path": "config.py"
+    },
+    "call_id": "call_1bf4bb44e24a",
+    "error": null,
+    "name": "edit",
+    "result": "Applied edit to config.py (28 chars \u2192 519 chars)"
+  },
+  {
+    "arguments": {
+      "include": "config.py",
+      "path": ".",
+      "pattern": "."
+    },
+    "call_id": "call_83be1573e988",
+    "error": null,
+    "name": "grep",
+    "result": "No matches found."
+  },
+  {
+    "arguments": {
+      "path": "config.py"
+    },
+    "call_id": "call_c8616c8420ba",
+    "error": null,
+    "name": "read",
+    "result": "1:\"\"\"Configuration helpers.\"\"\"\n2:\n3:\n4:def parse_kv(text):\n5:    \"\"\"Parse lines of `key = value` into a dict.\n6:\n7:    Blank lines and lines starting with '#' are ignored.\n8:    Whitespace around keys and values is stripped.\n9:    A value may itself contain '='.\n10:    \"\"\"\n11:    result = {}\n12:    for line in text.splitlines():\n13:        stripped = line.strip()\n14:        if not stripped or stripped.startswith(\"#\"):\n15:            continue\n16:        key, _, value = stripped.partition(\"=\")\n17:        result[key.strip()] = value.strip()\n18:    return result\n"
+  },
+  {
+    "arguments": {
+      "include": "*.py",
+      "path": ".",
+      "pattern": "."
+    },
+    "call_id": "call_822c6e188b36",
+    "error": null,
+    "name": "grep",
+    "result": "No matches found."
+  },
+  {
+    "arguments": {
+      "pattern": "**/*.py"
+    },
+    "call_id": "call_69202e4ad4c2",
+    "error": null,
+    "name": "glob",
+    "result": "/private/var/folders/qq/qf_l44m56tq6hbd1hr77tgwm0000gn/T/odyssey-eval-parse_kv-3qutpbbz/config.py\n/private/var/folders/qq/qf_l44m56tq6hbd1hr77tgwm0000gn/T/odyssey-eval-parse_kv-3qutpbbz/tests/test_config.py"
+  },
+  {
+    "arguments": {
+      "include": "*.py",
+      "path": "/private/var/folders/qq/qf_l44m56tq6hbd1hr77tgwm0000gn/T/odyssey-eval-parse_kv-3qutpbbz",
+      "pattern": "."
+    },
+    "call_id": "call_274eac71ec23",
+    "error": null,
+    "name": "grep",
+    "result": "No matches found."
+  },
+  {
+    "arguments": {
+      "path": "tests/test_config.py"
+    },
+    "call_id": "call_e603ed256da5",
+    "error": null,
+    "name": "read",
+    "result": "1:from config import parse_kv\n2:\n3:\n4:def test_parse_kv():\n5:    text = \"# comment\\n\\nname = odyssey\\n url=http://x/?a=b \\n\"\n6:    assert parse_kv(text) == {\"name\": \"odyssey\", \"url\": \"http://x/?a=b\"}\n7:\n8:\n9:def test_empty():\n10:    assert parse_kv(\"\") == {}\n"
+  },
+  {
+    "arguments": {
+      "path": "config.py"
+    },
+    "call_id": "call_6fe7800d3b4e",
+    "error": null,
+    "name": "read",
+    "result": "1:\"\"\"Configuration helpers.\"\"\"\n2:\n3:\n4:def parse_kv(text):\n5:    \"\"\"Parse lines of `key = value` into a dict.\n6:\n7:    Blank lines and lines starting with '#' are ignored.\n8:    Whitespace around keys and values is stripped.\n9:    A value may itself contain '='.\n10:    \"\"\"\n11:    result = {}\n12:    for line in text.splitlines():\n13:        stripped = line.strip()\n14:        if not stripped or stripped.startswith(\"#\"):\n15:            continue\n16:        key, _, value = stripped.partition(\"=\")\n17:        result[key.strip()] = value.strip()\n18:    return result\n"
+  },
+  {
+    "arguments": {
+      "path": "config.py"
+    },
+    "call_id": "call_8ecea22133c9",
+    "error": null,
+    "name": "read",
+    "result": "1:\"\"\"Configuration helpers.\"\"\"\n2:\n3:\n4:def parse_kv(text):\n5:    \"\"\"Parse lines of `key = value` into a dict.\n6:\n7:    Blank lines and lines starting with '#' are ignored.\n8:    Whitespace around keys and values is stripped.\n9:    A value may itself contain '='.\n10:    \"\"\"\n11:    result = {}\n12:    for line in text.splitlines():\n13:        stripped = line.strip()\n14:        if not stripped or stripped.startswith(\"#\"):\n15:            continue\n16:        key, _, value = stripped.partition(\"=\")\n17:        result[key.strip()] = value.strip()\n18:    return result\n"
+  }
+]

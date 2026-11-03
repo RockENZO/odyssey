@@ -1,0 +1,12 @@
+[
+  {
+    "arguments": {
+      "content": "def fizzbuzz(n: int) -> str:\n    \"\"\"Return \"FizzBuzz\" if n is divisible by 3 and 5, \"Fizz\" if by 3, \"Buzz\" if by 5, else str(n).\"\"\"\n    if n % 15 == 0:\n        return \"FizzBuzz\"\n    if n % 3 == 0:\n        return \"Fizz\"\n    if n % 5 == 0:\n        return \"Buzz\"\n    return str(n)\n",
+      "path": "fizzbuzz.py"
+    },
+    "call_id": "call_a15183dc153f",
+    "error": null,
+    "name": "write",
+    "result": "Written 278 bytes to fizzbuzz.py"
+  }
+]

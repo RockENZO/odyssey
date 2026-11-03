@@ -1,0 +1,116 @@
+[
+  {
+    "arguments": {
+      "path": "stack.py"
+    },
+    "call_id": "call_2406a75abc67",
+    "error": null,
+    "name": "read",
+    "result": "1:class Stack:\n2:    def __init__(self):\n3:        self._items = []\n4:\n5:    def push(self, value):\n6:        self._items.append(value)\n7:\n8:    def pop(self):\n9:        return self._items.pop()\n"
+  },
+  {
+    "arguments": {
+      "path": "tests/test_stack.py"
+    },
+    "call_id": "call_c0db91770594",
+    "error": null,
+    "name": "read",
+    "result": "1:import pytest\n2:\n3:from stack import Stack\n4:\n5:\n6:def test_max_follows_pops():\n7:    s = Stack()\n8:    for v in (3, 1, 5, 2):\n9:        s.push(v)\n10:    assert s.max() == 5\n11:    s.pop()\n12:    s.pop()\n13:    assert s.max() == 3\n14:\n15:\n16:def test_empty_raises():\n17:    s = Stack()\n18:    with pytest.raises(IndexError):\n19:        s.pop()\n20:    with pytest.raises(IndexError):\n21:        s.max()\n"
+  },
+  {
+    "arguments": {
+      "new_string": "    def pop(self):\n        if not self._items:\n            raise IndexError(\"pop from empty stack\")\n        return self._items.pop()\n\n    def max(self):\n        if not self._items:\n            raise IndexError(\"max from empty stack\")\n        return max(self._items)",
+      "old_string": "    def pop(self):\n        return self._items.pop()",
+      "path": "stack.py"
+    },
+    "call_id": "call_7d2b90792a83",
+    "error": null,
+    "name": "edit",
+    "result": "Applied edit to stack.py (51 chars \u2192 265 chars)"
+  },
+  {
+    "arguments": {
+      "path": "stack.py"
+    },
+    "call_id": "call_985d69aac6a4",
+    "error": null,
+    "name": "read",
+    "result": "1:class Stack:\n2:    def __init__(self):\n3:        self._items = []\n4:\n5:    def push(self, value):\n6:        self._items.append(value)\n7:\n8:    def pop(self):\n9:        if not self._items:\n10:            raise IndexError(\"pop from empty stack\")\n11:        return self._items.pop()\n12:\n13:    def max(self):\n14:        if not self._items:\n15:            raise IndexError(\"max from empty stack\")\n16:        return max(self._items)\n"
+  },
+  {
+    "arguments": {
+      "include": "*.cfg",
+      "pattern": "pytest|python"
+    },
+    "call_id": "call_faaac57a6591",
+    "error": null,
+    "name": "grep",
+    "result": "No matches found."
+  },
+  {
+    "arguments": {
+      "pattern": "**/pytest.ini"
+    },
+    "call_id": "call_eddbc10050b4",
+    "error": null,
+    "name": "glob",
+    "result": "No files found matching that pattern."
+  },
+  {
+    "arguments": {
+      "pattern": "**/conftest.py"
+    },
+    "call_id": "call_0a9188b67f94",
+    "error": null,
+    "name": "glob",
+    "result": "No files found matching that pattern."
+  },
+  {
+    "arguments": {
+      "include": "*.toml",
+      "pattern": "."
+    },
+    "call_id": "call_2deedf8f0eaa",
+    "error": null,
+    "name": "grep",
+    "result": "No matches found."
+  },
+  {
+    "arguments": {
+      "include": "*.cfg",
+      "pattern": "."
+    },
+    "call_id": "call_ab8e1ea05550",
+    "error": null,
+    "name": "grep",
+    "result": "No matches found."
+  },
+  {
+    "arguments": {
+      "pattern": "**/*.cfg"
+    },
+    "call_id": "call_37e6bbafe5dc",
+    "error": null,
+    "name": "glob",
+    "result": "No files found matching that pattern."
+  },
+  {
+    "arguments": {
+      "pattern": "**/*"
+    },
+    "call_id": "call_4649f958a31c",
+    "error": null,
+    "name": "glob",
+    "result": "/private/var/folders/qq/qf_l44m56tq6hbd1hr77tgwm0000gn/T/odyssey-eval-stack_max-_a1fnzg3/stack.py\n/private/var/folders/qq/qf_l44m56tq6hbd1hr77tgwm0000gn/T/odyssey-eval-stack_max-_a1fnzg3/tests\n/private/var/folders/qq/qf_l44m56tq6hbd1hr77tgwm0000gn/T/odyssey-eval-stack_max-_a1fnzg3/tests/test_stack.py"
+  },
+  {
+    "arguments": {
+      "include": "__init__.py",
+      "pattern": "."
+    },
+    "call_id": "call_8d545f79d470",
+    "error": null,
+    "name": "grep",
+    "result": "No matches found."
+  }
+]

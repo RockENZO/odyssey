@@ -1,0 +1,12 @@
+[
+  {
+    "arguments": {
+      "content": "def top_n(scores, n):\n    ordered = sorted(scores.items(), key=lambda kv: (-kv[1], kv[0]))\n    return [name for name, _ in ordered][:n]\n",
+      "path": "rank.py"
+    },
+    "call_id": "call_8fdece8c2ef8",
+    "error": null,
+    "name": "write",
+    "result": "Written 136 bytes to rank.py"
+  }
+]

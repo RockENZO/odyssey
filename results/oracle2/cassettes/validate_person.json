@@ -1,0 +1,12 @@
+[
+  {
+    "arguments": {
+      "content": "def make_person(name, age):\n    if not isinstance(name, str) or not name.strip():\n        raise ValueError(\"name must not be empty\")\n    if isinstance(age, bool) or not isinstance(age, int) or age < 0:\n        raise ValueError(\"age must be a non-negative int\")\n    return {\"name\": name, \"age\": age}\n",
+      "path": "person.py"
+    },
+    "call_id": "call_e278539a3b43",
+    "error": null,
+    "name": "write",
+    "result": "Written 299 bytes to person.py"
+  }
+]

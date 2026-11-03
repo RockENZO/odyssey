@@ -1,0 +1,12 @@
+[
+  {
+    "arguments": {
+      "content": "def total_sales(path):\n    total = 0.0\n    with open(path) as f:\n        header = f.readline().strip().split(\",\")\n        col = header.index(\"amount\")\n        for line in f:\n            if not line.strip():\n                continue\n            total += float(line.split(\",\")[col])\n    return total\n",
+      "path": "sales.py"
+    },
+    "call_id": "call_f8a82f7b68b4",
+    "error": null,
+    "name": "write",
+    "result": "Written 298 bytes to sales.py"
+  }
+]

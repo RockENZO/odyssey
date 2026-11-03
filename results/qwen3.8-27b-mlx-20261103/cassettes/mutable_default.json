@@ -1,0 +1,100 @@
+[
+  {
+    "arguments": {
+      "path": "cart.py"
+    },
+    "call_id": "call_c132f2dbb276",
+    "error": null,
+    "name": "read",
+    "result": "1:def add(item, items=[]):\n2:    items.append(item)\n3:    return items\n"
+  },
+  {
+    "arguments": {
+      "path": "tests/test_cart.py"
+    },
+    "call_id": "call_f0175663510a",
+    "error": null,
+    "name": "read",
+    "result": "1:from cart import add\n2:\n3:\n4:def test_calls_do_not_share_state():\n5:    assert add(\"a\") == [\"a\"]\n6:    assert add(\"b\") == [\"b\"]\n7:\n8:\n9:def test_given_list_is_extended():\n10:    mine = [\"x\"]\n11:    assert add(\"y\", mine) == [\"x\", \"y\"]\n12:    assert mine == [\"x\", \"y\"]\n"
+  },
+  {
+    "arguments": {
+      "new_string": "def add(item, items=None):\n    if items is None:\n        items = []\n    items.append(item)\n    return items",
+      "old_string": "def add(item, items=[]):\n    items.append(item)\n    return items",
+      "path": "cart.py"
+    },
+    "call_id": "call_d30424792a07",
+    "error": null,
+    "name": "edit",
+    "result": "Applied edit to cart.py (64 chars \u2192 107 chars)"
+  },
+  {
+    "arguments": {
+      "include": "conftest.py",
+      "path": ".",
+      "pattern": "."
+    },
+    "call_id": "call_c46eb75daed3",
+    "error": null,
+    "name": "grep",
+    "result": "No matches found."
+  },
+  {
+    "arguments": {
+      "include": "pytest.ini",
+      "path": ".",
+      "pattern": "."
+    },
+    "call_id": "call_9952b8deb52a",
+    "error": null,
+    "name": "grep",
+    "result": "No matches found."
+  },
+  {
+    "arguments": {
+      "include": "setup.cfg",
+      "path": ".",
+      "pattern": "."
+    },
+    "call_id": "call_ce01c2e342fa",
+    "error": null,
+    "name": "grep",
+    "result": "No matches found."
+  },
+  {
+    "arguments": {
+      "pattern": "**/*.cfg"
+    },
+    "call_id": "call_37b54e53f0d1",
+    "error": null,
+    "name": "glob",
+    "result": "No files found matching that pattern."
+  },
+  {
+    "arguments": {
+      "pattern": "**/*.ini"
+    },
+    "call_id": "call_e288b510bc8b",
+    "error": null,
+    "name": "glob",
+    "result": "No files found matching that pattern."
+  },
+  {
+    "arguments": {
+      "pattern": "**/*.toml"
+    },
+    "call_id": "call_fbe99c22a9d4",
+    "error": null,
+    "name": "glob",
+    "result": "No files found matching that pattern."
+  },
+  {
+    "arguments": {
+      "path": "cart.py"
+    },
+    "call_id": "call_f670f47651b6",
+    "error": null,
+    "name": "read",
+    "result": "1:def add(item, items=None):\n2:    if items is None:\n3:        items = []\n4:    items.append(item)\n5:    return items\n"
+  }
+]

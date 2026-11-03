@@ -1,0 +1,12 @@
+[
+  {
+    "arguments": {
+      "content": "class Stack:\n    def __init__(self):\n        self._items = []\n\n    def push(self, value):\n        self._items.append(value)\n\n    def pop(self):\n        return self._items.pop()\n\n    def max(self):\n        if not self._items:\n            raise IndexError(\"max of empty stack\")\n        return max(self._items)\n",
+      "path": "stack.py"
+    },
+    "call_id": "call_e95109c6f2fe",
+    "error": null,
+    "name": "write",
+    "result": "Written 308 bytes to stack.py"
+  }
+]

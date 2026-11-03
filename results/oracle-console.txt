@@ -1,0 +1,54 @@
+Traceback (most recent call last):
+  File "/Users/rockingmac/Desktop/git daily maintainance/odyssey-eval-run/odyssey/.venv/lib/python3.13/site-packages/agent_ledger/verifier.py", line 187, in check
+    self._wait_then_stop_descendants(process)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File "/Users/rockingmac/Desktop/git daily maintainance/odyssey-eval-run/odyssey/.venv/lib/python3.13/site-packages/agent_ledger/verifier.py", line 219, in _wait_then_stop_descendants
+    self._kill_group(process)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^
+  File "/Users/rockingmac/Desktop/git daily maintainance/odyssey-eval-run/odyssey/.venv/lib/python3.13/site-packages/agent_ledger/verifier.py", line 226, in _kill_group
+    os.killpg(process.pid, signal.SIGKILL)
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 1] Operation not permitted
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/Users/rockingmac/Desktop/git daily maintainance/odyssey-eval-run/odyssey/src/odyssey/evals/__main__.py", line 5, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/Users/rockingmac/Desktop/git daily maintainance/odyssey-eval-run/odyssey/src/odyssey/evals/runner.py", line 366, in main
+    report = asyncio.run(run_suite(tasks, chat_for, args.out, model=name, kind=kind, timeout=args.timeout, tools=tools))
+  File "/Users/rockingmac/.local/share/uv/python/cpython-3.13.12-macos-aarch64-none/lib/python3.13/asyncio/runners.py", line 195, in run
+    return runner.run(main)
+           ~~~~~~~~~~^^^^^^
+  File "/Users/rockingmac/.local/share/uv/python/cpython-3.13.12-macos-aarch64-none/lib/python3.13/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/rockingmac/.local/share/uv/python/cpython-3.13.12-macos-aarch64-none/lib/python3.13/asyncio/base_events.py", line 725, in run_until_complete
+    return future.result()
+           ~~~~~~~~~~~~~^^
+  File "/Users/rockingmac/Desktop/git daily maintainance/odyssey-eval-run/odyssey/src/odyssey/evals/runner.py", line 307, in run_suite
+    gold = await gold_trajectory(task, out_dir / "gold-scratch")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/rockingmac/Desktop/git daily maintainance/odyssey-eval-run/odyssey/src/odyssey/evals/runner.py", line 217, in gold_trajectory
+    _, calls = await run_task(task, oracle_chat(task), scratch)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/rockingmac/Desktop/git daily maintainance/odyssey-eval-run/odyssey/src/odyssey/evals/runner.py", line 192, in run_task
+    passed, detail = _independent_check(task, workdir, out_dir)
+                     ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/rockingmac/Desktop/git daily maintainance/odyssey-eval-run/odyssey/src/odyssey/evals/runner.py", line 114, in _independent_check
+    verdict = AllOf(pins, CommandVerifier(check_argv(_empty_config(out_dir)) + ["--junitxml", str(junit)], timeout=120)).check(workdir, [])
+  File "/Users/rockingmac/Desktop/git daily maintainance/odyssey-eval-run/odyssey/.venv/lib/python3.13/site-packages/agent_ledger/verifier.py", line 114, in check
+    verdict = verifier.check(workspace, claims)
+  File "/Users/rockingmac/Desktop/git daily maintainance/odyssey-eval-run/odyssey/.venv/lib/python3.13/site-packages/agent_ledger/verifier.py", line 194, in check
+    self._stop(process)
+    ~~~~~~~~~~^^^^^^^^^
+  File "/Users/rockingmac/Desktop/git daily maintainance/odyssey-eval-run/odyssey/.venv/lib/python3.13/site-packages/agent_ledger/verifier.py", line 243, in _stop
+    CommandVerifier._kill_group(process)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File "/Users/rockingmac/Desktop/git daily maintainance/odyssey-eval-run/odyssey/.venv/lib/python3.13/site-packages/agent_ledger/verifier.py", line 226, in _kill_group
+    os.killpg(process.pid, signal.SIGKILL)
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 1] Operation not permitted

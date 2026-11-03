@@ -1,0 +1,259 @@
+{
+  "environment": {
+    "kind": "model",
+    "model": "qwen3.8:27b-mlx",
+    "date": "2026-11-03 00:26 UTC",
+    "device": "Darwin arm64, Python 3.13.12",
+    "suite": {
+      "version": "1",
+      "hash": "2419f570a45ad49d2a12122a008a2cbf570d1bb1992d791f8ec38977b6c6b22c",
+      "frozen_hash_matches": true
+    },
+    "packages": {
+      "odyssey": "0.1.0",
+      "langgraph": "1.2.2",
+      "ollama": "0.6.2",
+      "trajectory-replay": "0.1.0",
+      "transactional-agent-ledger": "0.1.0"
+    },
+    "tools": [
+      "read",
+      "write",
+      "edit",
+      "glob",
+      "grep",
+      "todo_write"
+    ]
+  },
+  "summary": {
+    "tasks": 10,
+    "passed": 10,
+    "pass_rate": 1.0,
+    "gate_verified": 10,
+    "gate_disagrees": 0,
+    "median_tool_calls": 7.5,
+    "total_seconds": 485.4,
+    "mean_trajectory_f1": 0.0
+  },
+  "results": [
+    {
+      "id": "off_by_one",
+      "passed": true,
+      "detail": "1 tests passed",
+      "gate": "verified",
+      "repairs": 0,
+      "model_calls": 3,
+      "tool_calls": 3,
+      "seconds": 33.34,
+      "tools": [
+        "read",
+        "read",
+        "edit"
+      ],
+      "trajectory_f1": 0.0,
+      "error": ""
+    },
+    {
+      "id": "fizzbuzz",
+      "passed": true,
+      "detail": "1 tests passed",
+      "gate": "verified",
+      "repairs": 0,
+      "model_calls": 7,
+      "tool_calls": 9,
+      "seconds": 48.24,
+      "tools": [
+        "read",
+        "read",
+        "edit",
+        "grep",
+        "grep",
+        "glob",
+        "glob",
+        "glob",
+        "read"
+      ],
+      "trajectory_f1": 0.0,
+      "error": ""
+    },
+    {
+      "id": "slugify",
+      "passed": true,
+      "detail": "1 tests passed",
+      "gate": "verified",
+      "repairs": 0,
+      "model_calls": 5,
+      "tool_calls": 6,
+      "seconds": 41.45,
+      "tools": [
+        "glob",
+        "glob",
+        "read",
+        "read",
+        "edit",
+        "read"
+      ],
+      "trajectory_f1": 0.0,
+      "error": ""
+    },
+    {
+      "id": "mutable_default",
+      "passed": true,
+      "detail": "2 tests passed",
+      "gate": "verified",
+      "repairs": 0,
+      "model_calls": 8,
+      "tool_calls": 10,
+      "seconds": 64.7,
+      "tools": [
+        "read",
+        "read",
+        "edit",
+        "grep",
+        "grep",
+        "grep",
+        "glob",
+        "glob",
+        "glob",
+        "read"
+      ],
+      "trajectory_f1": 0.0,
+      "error": ""
+    },
+    {
+      "id": "rename_function",
+      "passed": true,
+      "detail": "2 tests passed",
+      "gate": "verified",
+      "repairs": 0,
+      "model_calls": 11,
+      "tool_calls": 15,
+      "seconds": 64.55,
+      "tools": [
+        "glob",
+        "glob",
+        "read",
+        "read",
+        "glob",
+        "read",
+        "edit",
+        "edit",
+        "edit",
+        "read",
+        "read",
+        "grep",
+        "glob",
+        "glob",
+        "glob"
+      ],
+      "trajectory_f1": 0.0,
+      "error": ""
+    },
+    {
+      "id": "parse_kv",
+      "passed": true,
+      "detail": "2 tests passed",
+      "gate": "verified",
+      "repairs": 0,
+      "model_calls": 11,
+      "tool_calls": 11,
+      "seconds": 78.6,
+      "tools": [
+        "read",
+        "read",
+        "edit",
+        "grep",
+        "read",
+        "grep",
+        "glob",
+        "grep",
+        "read",
+        "read",
+        "read"
+      ],
+      "trajectory_f1": 0.0,
+      "error": ""
+    },
+    {
+      "id": "stack_max",
+      "passed": true,
+      "detail": "2 tests passed",
+      "gate": "verified",
+      "repairs": 0,
+      "model_calls": 9,
+      "tool_calls": 12,
+      "seconds": 49.65,
+      "tools": [
+        "read",
+        "read",
+        "edit",
+        "read",
+        "grep",
+        "glob",
+        "glob",
+        "grep",
+        "grep",
+        "glob",
+        "glob",
+        "grep"
+      ],
+      "trajectory_f1": 0.0,
+      "error": ""
+    },
+    {
+      "id": "csv_total",
+      "passed": true,
+      "detail": "2 tests passed",
+      "gate": "verified",
+      "repairs": 0,
+      "model_calls": 4,
+      "tool_calls": 5,
+      "seconds": 25.64,
+      "tools": [
+        "read",
+        "read",
+        "edit",
+        "read",
+        "glob"
+      ],
+      "trajectory_f1": 0.0,
+      "error": ""
+    },
+    {
+      "id": "validate_person",
+      "passed": true,
+      "detail": "6 tests passed",
+      "gate": "verified",
+      "repairs": 0,
+      "model_calls": 3,
+      "tool_calls": 3,
+      "seconds": 45.55,
+      "tools": [
+        "read",
+        "read",
+        "edit"
+      ],
+      "trajectory_f1": 0.0,
+      "error": ""
+    },
+    {
+      "id": "top_scores",
+      "passed": true,
+      "detail": "1 tests passed",
+      "gate": "verified",
+      "repairs": 0,
+      "model_calls": 4,
+      "tool_calls": 5,
+      "seconds": 33.63,
+      "tools": [
+        "glob",
+        "glob",
+        "read",
+        "read",
+        "edit"
+      ],
+      "trajectory_f1": 0.0,
+      "error": ""
+    }
+  ]
+}

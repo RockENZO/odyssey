@@ -1,0 +1,11 @@
+off_by_one         passed=True  gate=verified         tools=  3    33.3s
+fizzbuzz           passed=True  gate=verified         tools=  9    48.2s
+slugify            passed=True  gate=verified         tools=  6    41.5s
+mutable_default    passed=True  gate=verified         tools= 10    64.7s
+rename_function    passed=True  gate=verified         tools= 15    64.5s
+parse_kv           passed=True  gate=verified         tools= 11    78.6s
+stack_max          passed=True  gate=verified         tools= 12    49.6s
+csv_total          passed=True  gate=verified         tools=  5    25.6s
+validate_person    passed=True  gate=verified         tools=  3    45.5s
+top_scores         passed=True  gate=verified         tools=  5    33.6s
+{"tasks": 10, "passed": 10, "pass_rate": 1.0, "gate_verified": 10, "gate_disagrees": 0, "median_tool_calls": 7.5, "total_seconds": 485.4, "mean_trajectory_f1": 0.0}

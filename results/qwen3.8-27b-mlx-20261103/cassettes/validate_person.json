@@ -1,0 +1,31 @@
+[
+  {
+    "arguments": {
+      "path": "person.py"
+    },
+    "call_id": "call_ae0dee5b4756",
+    "error": null,
+    "name": "read",
+    "result": "1:def make_person(name, age):\n2:    return {\"name\": name, \"age\": age}\n"
+  },
+  {
+    "arguments": {
+      "path": "tests/test_person.py"
+    },
+    "call_id": "call_c5b345f89113",
+    "error": null,
+    "name": "read",
+    "result": "1:import pytest\n2:\n3:from person import make_person\n4:\n5:\n6:def test_valid():\n7:    assert make_person(\"Ada\", 36) == {\"name\": \"Ada\", \"age\": 36}\n8:\n9:\n10:@pytest.mark.parametrize(\"name,age\", [(\"\", 3), (\"   \", 3), (\"Ada\", -1), (\"Ada\", \"3\"), (\"Ada\", 2.5)])\n11:def test_invalid(name, age):\n12:    with pytest.raises(ValueError):\n13:        make_person(name, age)\n"
+  },
+  {
+    "arguments": {
+      "new_string": "def make_person(name, age):\n    if not name or not name.strip():\n        raise ValueError(\"name must not be empty or whitespace-only\")\n    if not isinstance(age, int) or isinstance(age, bool):\n        raise ValueError(\"age must be an int\")\n    if age < 0:\n        raise ValueError(\"age must not be negative\")\n    return {\"name\": name, \"age\": age}",
+      "old_string": "def make_person(name, age):\n    return {\"name\": name, \"age\": age}",
+      "path": "person.py"
+    },
+    "call_id": "call_19bfc9c0c479",
+    "error": null,
+    "name": "edit",
+    "result": "Applied edit to person.py (65 chars \u2192 346 chars)"
+  }
+]

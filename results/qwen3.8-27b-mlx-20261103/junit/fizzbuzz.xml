@@ -1,0 +1,1 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="0" skipped="0" tests="1" time="1.110" timestamp="2026-11-03T10:49:12.851579+10:30" hostname="Rocks-Mac-mini.local"><testcase classname="tests.test_fizzbuzz" name="test_fizzbuzz" time="0.000" /></testsuite></testsuites>
