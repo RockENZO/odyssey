@@ -1,0 +1,26 @@
+$ pytest            # the project before the agent runs
+  2 failed in 0.02s
+
+$ python crash_resume.py agent start     # process A: graph engine + ledger gate, scripted model
+  model: read calc.py
+  tool result: 1:def total_with_tax(prices, rate):
+  model: edit calc.py (multiply -> 1 + rate)
+  tool result: Applied edit to calc.py (18 chars → 24 chars)
+[crash point] the first two steps are saved; waiting to be killed
+
+$ kill -9 1478      # process A is gone mid-turn
+  (exit status -9; the file on disk has the edit, the turn is unfinished)
+
+$ python crash_resume.py agent resume    # process B: new process, same checkpoint file
+  restored from the checkpoint: 2 tool calls already done (read, edit)
+  tool result: Applied edit to calc.py (18 chars → 24 chars)
+  model: done
+  tool calls after the resume: 2 (none repeated)
+turn status: verified
+ledger gate: accepted: 'python -m pytest -q -p no:cacheprovider' exited 0
+agent: Fixed total_with_tax: the tax was multiplied instead of added.
+
+$ pytest            # independent check
+  2 passed in 0.00s
+
+Scripted model: this shows checkpoint, resume and the verification gate, not model ability.

@@ -152,3 +152,17 @@ def test_a_turn_that_only_delegated_is_still_checked(tmp_path, monkeypatch):
     ledger = ledger_of(tmp_path)
     assert ledger.rejected_count() == 3
     ledger.close()
+
+
+def test_crash_resume_demo_runs_end_to_end():
+    """The demo script really kills a process mid-turn and finishes the turn in a new one."""
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    script = Path(__file__).resolve().parents[1] / "docs" / "demo" / "crash_resume.py"
+    out = subprocess.run([sys.executable, str(script)], capture_output=True, text=True, timeout=120)
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert "exit status -9" in out.stdout
+    assert "turn status: verified" in out.stdout and "ledger gate: accepted" in out.stdout
+    assert out.stdout.count("2 passed") == 1 and "2 failed" in out.stdout
