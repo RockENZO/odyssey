@@ -30,3 +30,11 @@ separate `demo-config/` and `demo-data/` directories. Install Pillow and pyte to
 replay this captured session with `python docs/demo/render_session.py`. The
 renderer uses the macOS Menlo and Arial fonts and frame selection for this
 recording. Read the script before recording a different task.
+
+## Crash-resume demo
+
+`crash_resume.py` is a second, separate demo of the graph engine: it kills the first process with SIGKILL
+mid-turn and finishes the turn in a new process from the SQLite checkpoint, then the ledger gate runs pytest.
+`crash-resume.txt` is its captured output, `render_crash_resume.py` (needs Pillow) draws that text into
+`crash-resume.gif`. The model is a scripted stand-in with three fixed replies; unlike the recording above, it
+is not a model result. The captured text is drawn line by line, with timing and colour added and no lines added.

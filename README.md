@@ -17,6 +17,14 @@ is a functional demonstration, not a latency benchmark.
 [Saved tool results](docs/demo/tool-trace.jsonl) ·
 [Recording details](docs/demo/README.md)
 
+## Crash recovery (graph engine)
+
+![A process is killed with SIGKILL mid-turn; a new process resumes from the SQLite checkpoint and the ledger gate accepts the fix](docs/demo/crash-resume.gif)
+
+The graph engine checkpoints every step to SQLite. In this run the agent reads and edits `calc.py`, the process is killed with `kill -9` before the turn ends, and a new process resumes from the same checkpoint file: the two finished tool calls are not repeated, and the turn only counts as `verified` once the ledger gate has run the tests and they pass. The tools, the SQLite checkpoint, the SIGKILL, pytest and the ledger are real; **the model is a scripted stand-in**, so this shows the engine, not model ability. For a real model result see [Evaluation](#evaluation-experimental).
+
+Reproduce it with `uv sync --extra verify && uv run python docs/demo/crash_resume.py` (the captured output is [`crash-resume.txt`](docs/demo/crash-resume.txt); `tests/test_verify_gate.py` runs the script in CI). Limits: file changes made before a crash stay on disk (there is no rollback), and a tool that was running at the moment of the crash may have run, which the resume reports instead of hiding.
+
 ## Features
 
 - **Interactive REPL** — `uv run odyssey` drops you into a continuous `> ` prompt. Chat back and forth, the AI uses tools autonomously.
