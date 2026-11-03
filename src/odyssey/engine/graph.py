@@ -84,7 +84,7 @@ def new_turn(user_input: str, *, max_model_calls: int = 25, max_tool_calls: int 
 
 
 def _model_messages(state: AgentState) -> list[dict[str, Any]]:
-    system = SYSTEM_PROMPT
+    system = SYSTEM_PROMPT + "- Use investigate to ask up to four independent read-only questions about the code at once; it cannot change anything\n"
     if state.get("todos"):
         system += "\nCurrent plan:\n" + format_todos(state["todos"])
     return [{"role": "system", "content": system}, *state.get("messages", [])]
@@ -98,6 +98,9 @@ def build_graph(
     acceptance: Acceptance | None = None,
 ):
     policy = policy or ApprovalPolicy()
+    from odyssey.engine.investigate import register_investigate
+
+    register_investigate(chat)
 
     async def agent(state: AgentState) -> dict[str, Any]:
         if state.get("model_calls", 0) >= state.get("max_model_calls", 25):
