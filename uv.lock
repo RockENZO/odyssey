@@ -1163,6 +1163,7 @@ dependencies = [
 
 [package.optional-dependencies]
 eval = [
+    { name = "pytest" },
     { name = "trajectory-replay" },
 ]
 verify = [
@@ -1185,9 +1186,10 @@ requires-dist = [
     { name = "platformdirs", specifier = ">=4.0.0" },
     { name = "prompt-toolkit", specifier = ">=3.0.52" },
     { name = "pydantic", specifier = ">=2.0.0" },
+    { name = "pytest", marker = "extra == 'eval'", specifier = ">=8" },
     { name = "rich", specifier = ">=13.0.0" },
     { name = "trajectory-replay", marker = "extra == 'eval'", git = "https://github.com/RockENZO/trajectory-replay?rev=00d6c1e" },
-    { name = "transactional-agent-ledger", marker = "extra == 'verify'", git = "https://github.com/RockENZO/transactional-agent-ledger?rev=bf89fab" },
+    { name = "transactional-agent-ledger", marker = "extra == 'verify'", git = "https://github.com/RockENZO/transactional-agent-ledger?rev=0e890f0" },
     { name = "typer", specifier = ">=0.15.0" },
 ]
 provides-extras = ["verify", "eval"]
@@ -2088,7 +2090,7 @@ source = { git = "https://github.com/RockENZO/trajectory-replay?rev=00d6c1e#00d6
 [[package]]
 name = "transactional-agent-ledger"
 version = "0.1.0"
-source = { git = "https://github.com/RockENZO/transactional-agent-ledger?rev=bf89fab#bf89fabb8d73efaf68f8b23a485bec07b9808b0d" }
+source = { git = "https://github.com/RockENZO/transactional-agent-ledger?rev=0e890f0#0e890f00717356fd518cc2afbb624224314d1b2f" }
 
 [[package]]
 name = "typer"
