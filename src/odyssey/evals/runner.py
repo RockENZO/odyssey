@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import contextlib
 import json
 import platform
 import shutil
@@ -34,6 +33,7 @@ from typing import Any, Awaitable, Callable
 
 from langgraph.checkpoint.memory import MemorySaver
 
+from odyssey.tools.registry import only_tools  # noqa: F401  (offer the model only some tools)
 from odyssey.evals.suite import SUITE_HASH, SUITE_VERSION, Task, check_argv, get_tasks, suite_hash
 
 ChatFn = Callable[[list[dict[str, Any]]], Awaitable[dict[str, Any]]]
@@ -43,21 +43,6 @@ ChatFn = Callable[[list[dict[str, Any]]], Awaitable[dict[str, Any]]]
 # gate runs the tests and hands failures back, so the model does not need a shell to iterate.
 # ``--allow-bash`` adds the shell back; it is not sandboxed.
 EVAL_TOOLS = ("read", "write", "edit", "glob", "grep", "todo_write")
-
-
-@contextlib.contextmanager
-def only_tools(names):
-    """Offer the model only these tools while the block runs; the registry is restored after."""
-    from odyssey.tools import registry
-
-    saved = dict(registry._tools)
-    registry._tools.clear()
-    registry._tools.update({n: t for n, t in saved.items() if n in names})
-    try:
-        yield
-    finally:
-        registry._tools.clear()
-        registry._tools.update(saved)
 
 
 @dataclass

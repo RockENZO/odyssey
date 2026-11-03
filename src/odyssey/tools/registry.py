@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass
 from typing import Any, Callable, Awaitable
 
@@ -65,6 +66,22 @@ _tools: dict[str, Tool] = {}
 
 def register(t: Tool) -> None:
     _tools[t.name] = t
+
+
+@contextlib.contextmanager
+def only_tools(names):
+    """Offer (and allow) only these tools while the block runs; the registry is restored after.
+
+    The model client reads the registry for the tool schemas, so this also decides what a model is shown.
+    """
+    saved = dict(_tools)
+    _tools.clear()
+    _tools.update({n: t for n, t in saved.items() if n in names})
+    try:
+        yield
+    finally:
+        _tools.clear()
+        _tools.update(saved)
 
 
 def unregister(name: str) -> None:
